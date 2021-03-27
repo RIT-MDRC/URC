@@ -1,3 +1,9 @@
+"""
+DO NOT USE
+this us just a test to make sure the transformation
+matrices are being calculated correctly
+"""
+
 from math import *
 import numpy as np
 
