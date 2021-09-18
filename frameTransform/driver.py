@@ -21,6 +21,7 @@ z_d     z_a     x_d     x_a
 
 calculates and prints the transformation matrices
 """
+
 def main():
 
     table = DHTable()

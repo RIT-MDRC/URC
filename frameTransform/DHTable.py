@@ -1,7 +1,7 @@
 from math import *
 import numpy as np
 
-from Frame import *
+# from Frame import *
 
 """
 z_distance  distance from Zi to Zi+1, measured along Xi
@@ -13,8 +13,8 @@ x_angle     angle from Xi to Xi+1, measured about Zi
 counter clockwise is positive
 clockwise is negative
 
-
 """
+
 class DHTable:
 
     def __init__(self):
@@ -31,11 +31,11 @@ class DHTable:
 
     def get_transform_mat_at(self, a1):
         a1 = self.table[a1]
-        return np.array([            # yes I purposely added 0 to each element in the array :)
-            [cos(a1.x_angle) + 0,                    -sin(a1.x_angle) + 0,                    0,                       a1.z_distance + 0], 
-            [sin(a1.x_angle) * cos(a1.z_angle) + 0,  cos(a1.x_angle) * cos(a1.z_angle) + 0,   -sin(a1.z_angle) + 0,    -sin(a1.z_distance) * a1.x_distance + 0], 
-            [sin(a1.x_angle) * sin(a1.z_angle) + 0,  cos(a1.x_angle) * sin(a1.z_angle) + 0,   cos(a1.z_angle) + 0,     cos(a1.z_distance) * a1.x_distance + 0], 
-            [0,                                      0,                                       0,                       1], 
+        return np.array([
+            [cos(a1.x_angle),                    -sin(a1.x_angle),                    0,                   a1.z_distance], 
+            [sin(a1.x_angle) * cos(a1.z_angle),  cos(a1.x_angle) * cos(a1.z_angle),   -sin(a1.z_angle),    -sin(a1.z_distance) * a1.x_distance], 
+            [sin(a1.x_angle) * sin(a1.z_angle),  cos(a1.x_angle) * sin(a1.z_angle),   cos(a1.z_angle),     cos(a1.z_distance) * a1.x_distance], 
+            [0,                                  0,                                   0,                   1], 
         ])
 
     def __str__(self) -> str:
