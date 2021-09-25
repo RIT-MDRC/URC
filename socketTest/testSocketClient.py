@@ -6,7 +6,7 @@
 import socket
 s = socket.socket()
 
-hostname = 'Camerons-Mac-mini.local' #replace with hostname given by running server ~CR
+hostname = 'WINDOWS-7A0047M' #replace with hostname given by running server ~CR
 port = 8000 # arbitrary, must match server ~CR
 
 s.connect((hostname,port))
