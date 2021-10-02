@@ -1,7 +1,9 @@
 import klampt
 from klampt.model import ik
 world = klampt.WorldModel()
-world.loadElement("data/robots/planar3R.rob")
+# world.loadElement("data/robots/planar3R.rob")
+# world.loadElement("planar3R.rob")
+world.loadElement("dh-example.rob")
 
 robot= world.robot(0)
 link = robot.link(2)
