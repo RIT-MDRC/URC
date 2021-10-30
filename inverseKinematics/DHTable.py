@@ -1,8 +1,6 @@
 from math import *
 import numpy as np
 
-# from Frame import *
-
 """
 z_distance  distance from Zi to Zi+1, measured along Xi
 z_angle     angle from Zi to Zi+1, measured about Xi
@@ -12,7 +10,6 @@ x_angle     angle from Xi to Xi+1, measured about Zi
 
 counter clockwise is positive
 clockwise is negative
-
 """
 
 class DHTable:
@@ -20,7 +17,7 @@ class DHTable:
     def __init__(self):
         self.table = []
 
-    def append_element(self, z_distance, z_angle, x_distance, x_angle):
+    def append_element(self, z_angle, x_angle, x_distance, z_distance):
         self.table.append(Element(len(self.table) + 1, z_distance, z_angle, x_distance, x_angle))
 
     def get_transform_mat_from(self, a1, a2):
@@ -47,7 +44,7 @@ class DHTable:
 
 class Element:
 
-    def __init__(self, axis, z_distance, z_angle, x_distance, x_angle):
+    def __init__(self, axis, z_angle, x_angle, x_distance, z_distance):
         self.axis = axis
         self.z_distance = z_distance
         self.z_angle = z_angle
@@ -55,4 +52,4 @@ class Element:
         self.x_angle = x_angle
 
     def __str__(self) -> str:
-        return '' + str(self.axis) + '|\t' + str(self.z_distance) + '\t' + str(self.z_angle) + '\t' + str(self.x_distance) +'\t' + str(self.x_angle) + '\t\n'
+        return '' + str(self.axis) + '|\t' + str(self.z_angle) + '\t' + str(self.x_angle) + '\t' + str(self.x_distance) +'\t' + str(self.z_distance) + '\t\n'
