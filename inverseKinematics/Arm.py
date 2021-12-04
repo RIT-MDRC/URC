@@ -87,6 +87,12 @@ class Arm:
             mat[2][0]
         ])
 
+    def pseudo_inverse():
+        pass
+
+    def jacobian():
+        pass
+
 def main():
     pass
 
