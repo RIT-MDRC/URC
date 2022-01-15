@@ -69,16 +69,16 @@ class Arm:
 
         # end effector
         if (index == -1):
-            index = self.N_joints - 1
+            index = self.n - 1
 
         start_joint = index
         mat = None
 
         while (index >= 0):
             if (index == start_joint):
-                mat = homogenous_transform_matrix(self.k[index], self.t[index], Q[index]) @ pos
+                mat = homogenous_transform_matrix(self.r[index], self.t[index], Q[index]) @ pos
             else:
-                mat = homogenous_transform_matrix(self.k[index], self.t[index], Q[index]) @ mat
+                mat = homogenous_transform_matrix(self.r[index], self.t[index], Q[index]) @ mat
             index = index - 1
 
         return np.array([
@@ -96,7 +96,7 @@ class Arm:
     
     @return: array containing the final joint angles
     """
-    def pseudo_inverse(self, start_angles, end_eff_translation_vector, goal, temp):
+    def pseudo_inverse(self, start_angles, end_eff_translation_vector, goal, max_iterations):
         angles = start_angles
         
         # these can be tuned as needed
@@ -110,7 +110,9 @@ class Arm:
         current = self.position(angles, p_i = end_eff_translation_vector)
         delta = end - current
 
-        while np.linalg.norm(delta) > 0.01:
+        i = 0
+
+        while np.linalg.norm(delta) > 0.01 and i < max_iterations:
             # print(f'Q[{angles}] , P[{delta}]')
 
             # reduce by scaling factor
@@ -127,6 +129,7 @@ class Arm:
             current = self.position(angles, p_i = end_eff_translation_vector)
             delta = end - current
 
+            i = i + 1
         return angles;
 
 
@@ -145,17 +148,17 @@ class Arm:
         joint_offset = end_effector_global_pos - self.position(Q,index=0)
 
         # Axes
-        kx = self.k[0][0]
-        ky = self.k[0][1]
-        kz = self.k[0][2]
-        k = np.array([kx, ky, kz])
+        rx = self.r[0][0]
+        ry = self.r[0][1]
+        rz = self.r[0][2]
+        r = np.array([rx, ry, rz])
 
         px = joint_offset[0]
         py = joint_offset[1]
         pz = joint_offset[2]
         joint_offset = np.array([px, py, pz])
 
-        this_jacobian = np.cross(k, joint_offset)
+        this_jacobian = np.cross(r, joint_offset)
 
         # Convert to a 2D matrix
         j0 = this_jacobian[0]
@@ -170,10 +173,10 @@ class Arm:
             joint_offset = end_effector_global_pos - self.position(Q,index=i)
 
             # Axes
-            kx = self.k[i][0]
-            ky = self.k[i][1]
-            kz = self.k[i][2]
-            k = np.array([kx, ky, kz])
+            rx = self.r[i][0]
+            ry = self.r[i][1]
+            rz = self.r[i][2]
+            r = np.array([rx, ry, rz])
 
             # FIXME lmao I didn't even notice this
             px = joint_offset[0]
@@ -181,7 +184,7 @@ class Arm:
             pz = joint_offset[2]
             joint_offset = np.array([px, py, pz])
 
-            this_jacobian = np.cross(k, joint_offset)
+            this_jacobian = np.cross(r, joint_offset)
 
             # Convert to a 2D matrix
             j0 = this_jacobian[0]
@@ -193,8 +196,52 @@ class Arm:
             jacobian = np.concatenate((jacobian, this_jacobian), axis=1) # side by side
         return jacobian;
 
-def main():
-    pass
+def main():    
+    # axes of rotation for each joint
+    # k = kx, ky, kz
+    k = np.array([[0,0,1],[0,1,0]])
+
+    # A 2D array that lists the translations from the previous joint to the current joint
+    # The first translation is from the base frame to joint 1 (which is equal to the base frame)
+    # The second translation is from joint 1 to joint 2
+    # t = tx, ty, tz
+    # using approximate measurements for now
+    # get the actual measurements from the cad model
+    a1 = 6
+    a2 = 2
+    a3 = 3
+    a4 = 2
+    t = np.array([[0,0,0],[a2,0,a1]])
+
+    # Position of end effector in the last joint's frame
+    endeffector_position = [a4,0,a3]
+
+    k_c = Arm(k,t)
+
+    # Starting joint angles in radians
+    starting_joints = np.array([0,0])
+
+    # desired end position for the end effector with respect to the base frame of the robotic arm
+    # endeffector_goal_position = np.array([4.0,10.0,a1 + a4])
+    endeffector_goal_position = np.array([0.0,0.0, a1 + a4])
+
+    # Display the starting position of each joint in the global frame
+    for i in np.arange(0, k_c.n):
+        print(f'joint {i} position = {k_c.position(starting_joints,index=i)}')
+
+    print(f'end_effector = {k_c.position(starting_joints,index=-1, p_i = endeffector_position)}')
+    print(f'goal = {endeffector_goal_position}')
+
+    # Return joint angles that result in the end effector reaching endeffector_goal_position
+    final_q = k_c.pseudo_inverse(starting_joints,
+                                endeffector_position,
+                                endeffector_goal_position,
+                                500)
+
+    # Final Joint Angles in degrees
+    print('\n\nFinal Joint Angles in Degrees')
+    print(f'Joint 1: {np.degrees(final_q[0])} , Joint 2: {np.degrees(final_q[1])}')
+
 
 if __name__ == '__main__':
   main()
