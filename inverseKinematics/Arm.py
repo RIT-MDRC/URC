@@ -167,7 +167,7 @@ class Arm:
         jacobian = this_jacobian
 
         for i in range(1, self.n):
-            p_eff_minus_this_p = end_effector_global_pos - self.position(Q,index=i)
+            joint_offset = end_effector_global_pos - self.position(Q,index=i)
 
             # Axes
             kx = self.k[i][0]
