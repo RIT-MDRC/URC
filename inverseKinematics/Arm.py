@@ -160,7 +160,7 @@ class Arm:
         end_effector_global_pos = self.position(Q, -1, end_eff_translation_vector)
         jacobian = []
 
-        joint_offset = end_effector_global_pos - self.position(Q,index=0)
+        joint_offset = end_effector_global_pos - self.position(Q, index=0)
 
         # axes of rotation
         r = np.array([self.r[0][0], self.r[0][1], self.r[0][2]])
@@ -176,9 +176,11 @@ class Arm:
         j0 = this_jacobian[0]
         j1 = this_jacobian[1]
         j2 = this_jacobian[2]
-        this_jacobian = np.array([[j0],
-                                [j1],
-                                [j2]])
+        this_jacobian = np.array([
+                                    [j0],
+                                    [j1],
+                                    [j2]
+                                ])
         jacobian = this_jacobian
 
         for i in range(1, self.n):
@@ -189,9 +191,11 @@ class Arm:
 
             this_jacobian = np.cross(r, joint_offset)
 
-            this_jacobian = np.array([[this_jacobian[0]],
-                                    [this_jacobian[1]],
-                                    [this_jacobian[2]]])
+            this_jacobian = np.array([
+                                        [this_jacobian[0]],
+                                        [this_jacobian[1]],
+                                        [this_jacobian[2]]
+                                    ])
             jacobian = np.concatenate((jacobian, this_jacobian), 1)
         return jacobian;
 
