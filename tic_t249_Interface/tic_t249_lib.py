@@ -1,7 +1,7 @@
 #################################################################
 # Filename: tic_t249_lib.py                                     #
 # Purpose: tic t249 motor control library for MDRC robotic arm  #
-# Authoer: Will Wright                                          #
+# Author: Will Wright                                          #
 # Date Created: 1/25/2022                                       #
 # Date last Modified: 1/30/2022 by Will Wright                  #
 #                                                               #
@@ -100,38 +100,3 @@ class TicI2C(object):
         # waits correct amount of time
         print("wait time: "+str(wait_time)+"\n")
         time.sleep(wait_time)
-        
-
-"""
-#Open a handle to "/dev/i2c-1", representing the I2C bus.
-bus = SMBus(1)
- 
-#Select the I2C address of the Tic (the device number).
-address = 14
-
-tic = TicI2C(bus, address)
- 
- 
- 
-tic.exit_safe_start()
-time.sleep(1)
-
-tic.energize()
-time.sleep(1)
-
-timestart = time.time()
-tic.set_position(0)
-timeend = time.time()
-print(timeend-timestart)
-
-
-tic.set_position(90)
-time.sleep(3)
-
-tic.set_position(0)
-time.sleep(2)
-
-
-#tic.deenergize()
-#time.sleep(1)
-"""
