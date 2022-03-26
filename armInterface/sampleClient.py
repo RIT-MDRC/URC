@@ -3,7 +3,7 @@ import socket
 s = socket.socket()
 port = 8000 
 
-s.connect(('localhost' ,port))
+s.connect(('localhost', port))
 
 terminated = False
 
