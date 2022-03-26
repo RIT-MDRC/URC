@@ -11,11 +11,11 @@ class Vector:
 
 class Server:
     def __init__(self, listen_socket = socket.socket(), port = 8000, address = 'localhost'):
-        self.terminated = False
-        self.listen_socket = listen_socket
-        self.port = port
-        self.address = address
-        self.vec = Vector(0, 0, 0)
+        self.terminated     = False
+        self.listen_socket  = listen_socket
+        self.port           = port
+        self.address        = address
+        self.vec            = Vector(0, 0, 0)
 
     def start_server(self):
         self.listen_socket.bind((self.address, self.port))
