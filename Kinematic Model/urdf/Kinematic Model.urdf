@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="Kinematic Model">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.125 0.124876444248601 0.0114927663217105"
+        rpy="0 0 0" />
+      <mass
+        value="1.4322893517415" />
+      <inertia
+        ixx="0.00751499612969008"
+        ixy="-4.14857977079374E-20"
+        ixz="5.59883976854344E-23"
+        iyy="0.00750616961569954"
+        iyz="4.48386910719772E-06"
+        izz="0.0148917103717458" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="link 1">
+    <inertial>
+      <origin
+        xyz="1.35962641978349E-08 -4.49406609148717E-10 0.0499583991824579"
+        rpy="0 0 0" />
+      <mass
+        value="0.745389957969349" />
+      <inertia
+        ixx="0.001236165400749"
+        ixy="-2.28287179719541E-09"
+        ixz="3.29901987186261E-10"
+        iyy="0.0013781182334038"
+        iyz="-4.34931645812276E-09"
+        izz="0.00103853376973756" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint1"
+    type="revolute">
+    <origin
+      xyz="0.125 0.075 0.02286"
+      rpy="0 0 1.5604" />
+    <parent
+      link="base_link" />
+    <child
+      link="link 1" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="1000" />
+  </joint>
+  <link
+    name="link 2">
+    <inertial>
+      <origin
+        xyz="-0.00254000000000003 -1.38777878078145E-16 0.1524"
+        rpy="0 0 0" />
+      <mass
+        value="0.902412401721688" />
+      <inertia
+        ixx="0.00932089199361009"
+        ixy="5.21772295508649E-19"
+        ixz="3.29211266351205E-18"
+        iyy="0.00934567259590457"
+        iyz="1.80203426434754E-18"
+        izz="0.000396566779325695" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint2"
+    type="revolute">
+    <origin
+      xyz="0 0 0.10478"
+      rpy="0.034608 0 -3.1416" />
+    <parent
+      link="link 1" />
+    <child
+      link="link 2" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-4.71"
+      upper="-1.57"
+      effort="0"
+      velocity="1000" />
+  </joint>
+  <link
+    name="link 3">
+    <inertial>
+      <origin
+        xyz="-7.49400541621981E-16 -0.244277581812728 4.6074255521944E-15"
+        rpy="0 0 0" />
+      <mass
+        value="1.40181180581322" />
+      <inertia
+        ixx="0.0284750839313573"
+        ixy="-7.46524017733105E-17"
+        ixz="-6.46286138755031E-19"
+        iyy="0.00248306633762881"
+        iyz="4.43761218675115E-17"
+        izz="0.03035643992009" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint3"
+    type="revolute">
+    <origin
+      xyz="0 0 0.3048"
+      rpy="3.1314 0 0" />
+    <parent
+      link="link 2" />
+    <child
+      link="link 3" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="0"
+      upper="3.14"
+      effort="0"
+      velocity="1000" />
+  </joint>
+  <link
+    name="link 4">
+    <inertial>
+      <origin
+        xyz="0 -0.0190759946076533 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.194716381321942" />
+      <inertia
+        ixx="0.00018975455749685"
+        ixy="-6.35274710440725E-21"
+        ixz="-1.19047833758632E-20"
+        iyy="9.84824842685459E-05"
+        iyz="9.12637559289373E-19"
+        izz="0.000194597566216488" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint4"
+    type="revolute">
+    <origin
+      xyz="0 -0.4572 0"
+      rpy="-0.0047459 0 0" />
+    <parent
+      link="link 3" />
+    <child
+      link="link 4" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="0"
+      velocity="1000" />
+  </joint>
+  <link
+    name="link 5">
+    <inertial>
+      <origin
+        xyz="-4.85722573273506E-17 -0.0228654552938931 -5.68305317155682E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.0345139192629378" />
+      <inertia
+        ixx="3.9382385101554E-05"
+        ixy="-1.41878018665095E-20"
+        ixz="1.49719690872098E-21"
+        iyy="9.77314082989533E-06"
+        iyz="4.48493188575395E-08"
+        izz="4.18538740394483E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 5.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint5"
+    type="revolute">
+    <origin
+      xyz="0 -0.0635 0"
+      rpy="3.1416 0 3.0664" />
+    <parent
+      link="link 4" />
+    <child
+      link="link 5" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="1.57"
+      upper="4.71"
+      effort="0"
+      velocity="1000" />
+  </joint>
+  <link
+    name="link 6">
+    <inertial>
+      <origin
+        xyz="0.00308285974901888 -0.0721978117099332 1.68677960488139E-10"
+        rpy="0 0 0" />
+      <mass
+        value="0.20810172376109" />
+      <inertia
+        ixx="0.000148964014298967"
+        ixy="9.90419646766673E-06"
+        ixz="-3.69564194208723E-13"
+        iyy="8.63259499506949E-05"
+        iyz="2.04359342953527E-12"
+        izz="0.000194010143112663" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 6.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://Kinematic Model/meshes/link 6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint6"
+    type="revolute">
+    <origin
+      xyz="0 -0.042878 0"
+      rpy="-3.1416 0.060969 3.1416" />
+    <parent
+      link="link 5" />
+    <child
+      link="link 6" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-6.28"
+      upper="6.28"
+      effort="0"
+      velocity="1000" />
+  </joint>
+</robot>
