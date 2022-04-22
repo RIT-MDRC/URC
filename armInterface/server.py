@@ -10,7 +10,7 @@ class Vector:
         self.z = z
 
 class Server:
-    def __init__(self, listen_socket = socket.socket(), port = 8000, address = 'localhost'):
+    def __init__(self, listen_socket = socket.socket(), port = 8000, address = 'urc.student.rit.edu'):
         self.terminated     = False
         self.listen_socket  = listen_socket
         self.port           = port

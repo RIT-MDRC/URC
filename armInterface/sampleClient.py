@@ -1,7 +1,7 @@
 import socket
 
 class Client:
-    def __init__(self, send_socket = socket.socket(), port = 8000, address = 'localhost'):
+    def __init__(self, send_socket = socket.socket(), port = 8000, address = 'urc.student.rit.edu'):
         self.terminated     = False
         self.send_socket    = send_socket
         self.port           = port
