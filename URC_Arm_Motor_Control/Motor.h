@@ -1,14 +1,18 @@
 #include "Arduino.h"
+#include "Math.h"
 #include <Wire.h>
 #include <Encoder.h>
 
 class Motor {
   public:
     // CONTRUCTION
-    Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deciveNum, float defaultSpeed, float defaultAccel);
+    Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deciveNum, float defaultSpeed, float defaultAccel, float moveThreshold);
     // I2C COMMUNICATION
     void exitSafeStart();  // Initialize controller
     void sendMotorSpeed(int16_t speed);  // Send cmdSpeed to controller
+
+    void moveMotor(int16_t speed); //Send a modified speed to controller based on max positions
+    
     uint16_t readUpTime();
     // POSITION CONTROL
     void setPosition(float newPos);    // Interpret user input and determine new direction to go
@@ -18,6 +22,15 @@ class Motor {
     // MISC FUNCTIONS
     void print(); // Print state to the serial moniter
     void reset(); // Reset I2C communication with driver
+
+    //Getter functions for private vars.
+    float getCurrPos();
+    float getCmdPos();
+    float degToPulse(float deg); //Calculate encoder position from degrees
+    float getMoveThreshold();
+    float getMinPos();
+    float getMaxPos();
+    
   private:    
     //GLOBAL MOTOR CONSTANTS
     float ABS_MAX_SPEED = 3200;  // Maximum drivable speed
@@ -32,6 +45,7 @@ class Motor {
     uint8_t I2C_NUM;       // I2C Device # of motor controller
     float MIN_POS;         // Mininum safe position
     float MAX_POS;         // Maxinum safe position
+    float MOVE_THRESHOLD;  //distance in degrees from endstops for deceleration of joint
 
     // MOTOR VARIABLES
     float currSpeed;      // Speed being sent to motor controller

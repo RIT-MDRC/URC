@@ -1,6 +1,6 @@
 #include "Motor.h"
 
-Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel) {
+Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel, float moveThreshold) {
     // MOTOR CONSTANTS
      this->PULSE_PER_REV = pulses;
      this->GEAR_RATIO = ratio;
@@ -9,6 +9,7 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
     // Convert limits from degrees to encoder pulses
      this->MIN_POS = minPos_degrees / 360 * pulses * ratio;
      this->MAX_POS = minPos_degrees / 360 * pulses * ratio;
+     this->MOVE_THRESHOLD = moveThreshold;
 
     // Initialize motion contrainsts to defaults
      this->cmdSpeed = defaultSpeed;
@@ -47,6 +48,43 @@ void Motor::sendMotorSpeed(int16_t speed) {
   Wire.write(speed >> 5 & 0x7F);
   Wire.endTransmission();
 }
+
+//Send a modified speed to controller based on max positions
+void Motor::moveMotor(int16_t speed) {
+  float dPos = 0;
+  float nPos = 0;
+  int16_t nSpeed = 0;
+
+  if(speed > 0){
+    dPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
+  }
+  else if(speed < 0){
+    dPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
+  }
+  else{
+    dPos = -1*getMoveThreshold();  // 0 Speed
+  }
+
+  if(dPos > 0){
+    nPos = PI/2;
+  }
+  else{
+    nPos = map(abs(dPos), 0, getMoveThreshold(), PI/2, 0);
+  }
+  
+  int16_t maxSpeed = (-cos(nPos) + 1) * 100 * (speed / abs(speed));
+
+  if(speed > maxSpeed){
+    nSpeed = maxSpeed;
+  }
+  else{
+    nSpeed = speed;
+  }
+
+  this->sendMotorSpeed(nSpeed);
+}
+
+
  
 uint16_t Motor::readUpTime() {
   Wire.beginTransmission(this->I2C_NUM);
@@ -185,4 +223,30 @@ void Motor::print() {
   Serial.print(this->dir_speed);
   Serial.print(",");
   Serial.println(this->dir_accel);
+}
+
+//Getter funcs for private vars
+float Motor::getCurrPos() {
+  return currPos;
+}
+
+float Motor::getCmdPos()  {
+  return cmdPos;
+}
+
+//Calculate encoder Count from degrees
+float Motor::degToPulse(float deg)  {
+  return deg / 360 * this->PULSE_PER_REV * this->GEAR_RATIO;
+}
+
+float Motor::getMoveThreshold()  {
+  return MOVE_THRESHOLD;
+}
+
+float Motor::getMinPos() {
+  return MIN_POS;
+}
+
+float Motor::getMaxPos() {
+  return MAX_POS;
 }

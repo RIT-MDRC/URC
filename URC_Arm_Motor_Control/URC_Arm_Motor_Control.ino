@@ -21,10 +21,10 @@ Encoder enc_J1(16,17);
 Encoder enc_J2(14,15);
 
 //MOTORS
-// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, 
-Motor J1(-90, 90, 1482.6, 2.5, 13, 500, 50);  // RATIO = 75 : 30
-Motor J2(0, 45, 1669.656, 15, 14, 1500, 150); //RATIO = 15 : 1
-Motor J3(0, 360, 1, 1, 15, 3200, 200);
+// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, movement threshold
+Motor J1(-90, 90, 1482.6, 2.5, 13, 500, 50, 30);  // RATIO = 75 : 30
+Motor J2(0, 45, 1669.656, 15, 14, 1500, 150, 30); //RATIO = 15 : 1
+Motor J3(0, 360, 1, 1, 15, 3200, 200, 20);
 
 Motor joints[NUM_JOINTS] = {J1, J2, J3};
 
@@ -110,6 +110,11 @@ void loop() {
         // Print motor status
         setPos = Serial.parseFloat();
         joints[n].print();
+        break;
+      case 'M':
+        //Move Motor
+        setSpeed = Serial.parseFloat();
+        joints[n].moveMotor(setSpeed);
         break;
       default:
         break;
