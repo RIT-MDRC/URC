@@ -11,21 +11,33 @@ int timer;   // Holds time since last sending command to motor controller
 int TIME;         // Holds last recorded time in milliseconds
 int t = 0;
 
-const uint8_t NUM_JOINTS = 2;
+//POTENTIOMETER VARIABLES
+const int potPin = 41;
+
+const uint8_t NUM_JOINTS = 3;
 
 //ENCODER VARIABLES
 Encoder enc_J1(16,17);
 Encoder enc_J2(14,15);
 
 //MOTORS
-Motor J1(1482.6, 52.95, 13, 500, 50);
-Motor J2(6678.624, 139.138, 14, 1500, 150);
+// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max
+Motor J1(-90, 90, 1482.6, 2.5, 13, 500, 50);  // RATIO = 75 : 30
+Motor J2(-10, 80, 1669.656, 30, 14, 2000, 100); //RATIO = 15 : 1
+Motor J3(670, 860, 360, 1, 15, 3200, 200);
 
-Motor joints[NUM_JOINTS] = {J1, J2};
+Motor joints[NUM_JOINTS] = {J1, J2, J3};
 
 // FUNCTIONS ---------------------------------------------------------------------------
 
 // SETUP -------------------------------------------------------------------------------
+
+  // !!!!!!!! IMPORTANT !!!!!!!!!!
+  //
+  // Make sure motors are at home position (ZERO DEGREES) when turned on
+  // If not, manually move arm to home position and reset
+  //
+  // !!!!!!!! IMPORTANT !!!!!!!!!!
 
 void setup() {
   // Begin I2C communication
@@ -38,6 +50,10 @@ void setup() {
   // Begin serial communication
   Serial.begin(115200);
   Serial.setTimeout(10);
+
+  // Initialize linear actuator potentiometer feedback
+  pinMode(potPin,INPUT);  // Input pin for pot
+  joints[2].setPosition(analogRead(potPin));
 
   // Initialize time variables
   timer = 0;
@@ -58,18 +74,19 @@ void loop() {
 // READING COMMAND FROM SERIAL ***********************************************************
   /* Commands expected as:
    *    DESIGNATOR_CHAR VALUE
-   * Valid DESIGNATOR CHARACTERS are P - Postion, S - Max Speed
+   * Valid DESIGNATOR CHARACTERS are P - Postion Set, S - Max Speed, R - Reset Drivers, Q - Print to Serial, M - Move, H - Homing
    */
   if (Serial.available() > 1) {
 
     float setSpeed = 0;
     float setPos = 0; 
+
+    // Read command identifier
     char cmd = (char) Serial.read();
-    int n = 0;
+    int n = Serial.parseInt() - 1;
     
     switch (cmd) {
       case 'P':
-        n = Serial.parseInt() - 1;
         // Set new command position
         setPos = Serial.parseFloat();
         joints[n].setPosition(setPos);
@@ -80,7 +97,6 @@ void loop() {
         break;
       case 'S':
         // Set new max speed
-        n = Serial.parseInt() - 1;
         setSpeed = Serial.parseFloat();
         if (joints[n].setMaxSpeed(setSpeed)) {        
           /*
@@ -90,13 +106,29 @@ void loop() {
         }
         break;
       case 'R':
-        n = Serial.parseInt() - 1;
-        joints[n].exitSafeStart();
+        // Reset motor driver and set position and speed to zero
+        joints[n].reset();
+
+        switch (n) {
+          case 0:
+            enc_J1.write(0);
+            break;
+          case 1:
+            enc_J2.write(0);
+            break;
+          case 2:
+            joints[n].setPosition(analogRead(potPin));
+            break;
+        }
+        Serial.print("RESET ");
+        Serial.println(n+1);
+        
         break;
       case 'Q':
-        n = Serial.parseInt() - 1;
-        // Print motor status
-        setPos = Serial.parseFloat();
+        // Print status of motor
+        Serial.print("JOINT ");
+        Serial.print(n+1);
+        Serial.print(": ");
         joints[n].print();
         break;
       default:
@@ -108,7 +140,7 @@ void loop() {
   // If enough time has passed ...
   if (timer >= 20) {
 
-    float newPos[NUM_JOINTS] = {enc_J1.read(), enc_J2.read()};
+    float newPos[NUM_JOINTS] = {enc_J1.read(), enc_J2.read(), (float)analogRead(potPin)};
     
     // Read and interpret the encoder
     for (int n = 0; n < NUM_JOINTS; n++) {

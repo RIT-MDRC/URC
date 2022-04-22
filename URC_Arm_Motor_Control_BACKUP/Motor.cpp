@@ -1,10 +1,14 @@
 #include "Motor.h"
 
-Motor::Motor(double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel) {
+Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel) {
     // MOTOR CONSTANTS
      this->PULSE_PER_REV = pulses;
      this->GEAR_RATIO = ratio;
      this->I2C_NUM = deviceNum;   // I2C Device # of motor controller
+
+    // Convert limits from degrees to encoder pulses
+     this->MIN_POS = minPos_degrees / 360 * pulses * ratio;
+     this->MAX_POS = maxPos_degrees / 360 * pulses * ratio;
 
     // Initialize motion contrainsts to defaults
      this->cmdSpeed = defaultSpeed;
@@ -55,15 +59,37 @@ uint16_t Motor::readUpTime() {
   return upTime;
 }
 
-void Motor::setPosition(float newPos) {
-  this->cmdPos = newPos;
+void Motor::setPosition(float newPos_degrees) {
+  // Convert desired position from degrees to encoder pulses
+  float newPos = newPos_degrees / 360 * this->PULSE_PER_REV * this->GEAR_RATIO;
+
+  // Check if desired position is within safe limits
+  if (newPos <= this->MAX_POS && newPos >= this->MIN_POS) {
+    // If desired position is in the safe range, set command position to desired position
+    this->cmdPos = newPos;
+  } else if (newPos > this->MAX_POS) {
+    // If desired pos is above safe max, set command position to max position
+    this->cmdPos = this->MAX_POS;
+  } else if (newPos < this->MIN_POS) {
+    // If desired pos is below safe min, set command position to min position
+    this->cmdPos = this->MIN_POS;
+  } else {
+    // If you're here, something has gone terribly wrong
+    Serial.println("Why are you here?");
+    return;
+  }
+
+  this->setDirection(this->cmdPos);
+}
+
+void Motor::setDirection(float newPos) {
   // Determine which direction to go
   if (this->currPos > newPos) {
-     this->dir_speed = this->REVERSE;
-     this->dir_accel = this->REVERSE;
+    this->dir_speed = this->REVERSE;
+    this->dir_accel = this->REVERSE;
   } else {
-     this->dir_speed = this->FORWARD;
-     this->dir_accel = this->FORWARD;
+    this->dir_speed = this->FORWARD;
+    this->dir_accel = this->FORWARD;
   }
   //print();
 }
@@ -100,12 +126,18 @@ void Motor::interpretEncoder(float newPos) {
 }
 
 float Motor::applyAccel() {
+
+  if (this->currPos > this->MAX_POS*1.1 || this->currPos < this->MIN_POS*1.1) {
+    this->currSpeed = 0;
+    return currSpeed;
+  }
+  
   // Check if motor is close enough to position
   if (abs(this->currPos - this->cmdPos) >= 10) {
     
     // Check if motor has overshot desired position and reverse direction if needed
-    if (this->currPos > this->cmdPos && this->dir_speed == this->FORWARD) {this->setPosition(this->cmdPos);Serial.println("WORKS");}
-    if (this->currPos < this->cmdPos && this->dir_speed == this->REVERSE) {this->setPosition(this->cmdPos);Serial.println("MAYBE WORKS");}
+    if (this->currPos > this->cmdPos && this->dir_speed == this->FORWARD) {this->setDirection(this->cmdPos);Serial.println("WORKS");}
+    if (this->currPos < this->cmdPos && this->dir_speed == this->REVERSE) {this->setDirection(this->cmdPos);Serial.println("MAYBE WORKS");}
     
     // Calculate new speed after acceleration and put it in buffer
     float buf_speed = this->currSpeed + (this->accel * (float)this->dir_accel);
