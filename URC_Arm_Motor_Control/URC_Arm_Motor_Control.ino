@@ -75,7 +75,9 @@ void loop() {
    *    DESIGNATOR_CHAR VALUE
    * Valid DESIGNATOR CHARACTERS are P - Postion Set, S - Max Speed, R - Reset Drivers, Q - Print to Serial, M - Move, H - Homing
    */
-  if (Serial.available() > 1) {
+  
+  //Serial.print(String(Serial.available()) + "\n"); 
+  if (Serial.available()) {
 
     float setSpeed = 0;
     float setPos = 0; 
@@ -92,7 +94,6 @@ void loop() {
         
         Serial.print("POSITION: ");
         Serial.println(setPos);
-        
         break;
       case 'S':
         // Set new max speed
@@ -121,7 +122,7 @@ void loop() {
         }
         Serial.print("RESET ");
         Serial.println(n+1);
-        
+        Serial.print(String(timer)+"\n");
         break;
       case 'Q':
         // Print status of motor
@@ -129,6 +130,7 @@ void loop() {
         Serial.print(n+1);
         Serial.print(": ");
         joints[n].print();
+        //Serial.print(String(timer)+"\n");
         break;
       case 'M':
         //Move Motor
