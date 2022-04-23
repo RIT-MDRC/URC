@@ -222,6 +222,19 @@ float Motor::applyAccel() {
   return 0;
 }
 
+//Home motor joint by moving at a slow speed.
+void Motor::homing(int16_t dir)  {
+  if(dir > 0){
+    sendMotorSpeed(10);
+  }
+  else if(dir < 0){
+    sendMotorSpeed(-10);
+  }
+  else{
+    sendMotorSpeed(0);
+  }
+}
+
 void Motor::reset() {
   this->currPos = 0;
   this->cmdPos = 0;

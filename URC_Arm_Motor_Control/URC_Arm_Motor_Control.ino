@@ -135,6 +135,11 @@ void loop() {
         setSpeed = Serial.parseFloat();
         joints[n].moveMotor(setSpeed);
         break;
+      case 'H':
+        //Home Motor
+        setSpeed = Serial.parseFloat();
+        joints[n].homing(setSpeed);
+        break;
       default:
         break;
     }
