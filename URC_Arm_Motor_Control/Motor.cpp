@@ -141,7 +141,7 @@ void Motor::interpretEncoder(float newPos) {
 void Motor::moveMotor(int16_t percent) {
   float dPos = 0;
   float nPos = 0;
-  int16_t nPercent = 0;
+  float nPercent = 0;
 
   //Calculate the difference between the current position and the endstop threshold which the arm would be moving towards
   if(percent > 0){
@@ -159,7 +159,7 @@ void Motor::moveMotor(int16_t percent) {
     nPos = map(abs(dPos), 0, getMoveThreshold(), PI/2, 0);
   }
   
-  int16_t maxPercent = (-cos(nPos) + 1) * 100 * this->dir_speed;
+  float maxPercent = (-cos(nPos) + 1) * 100 * this->dir_speed;
 
   //If the requested speed is acceptable, use it, otherwise use the calculated max speed
   if(percent > maxPercent){
@@ -231,10 +231,12 @@ float Motor::applyAccel() {
 //Home motor joint by moving at a slow speed.
 void Motor::homing(int16_t dir)  {
   if(dir > 0){
-    sendMotorSpeed(0.1*this->cmdSpeed);
+    sendMotorSpeed(0.75*this->cmdSpeed);
+    this->currSpeed = 0.75*this->cmdSpeed;
   }
   else if(dir < 0){
-    sendMotorSpeed(-0.1*this->cmdSpeed);
+    sendMotorSpeed(-0.75*this->cmdSpeed);
+    this->currSpeed = -0.75*this->cmdSpeed;
   }
   else{
     sendMotorSpeed(0);

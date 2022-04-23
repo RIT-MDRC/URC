@@ -158,7 +158,7 @@ void loop() {
         break;
       case 'G':
         // Actuate Gripper
-        actuateGripper(n);
+        actuateGripper(n+1);
         break;
       default:
         break;
@@ -196,7 +196,7 @@ void loop() {
       enc_J1.write(0);
       enc_J2.write(0);
       joints[2].setPosition(analogRead(potPin));
-      Serial.print("FULL RESET");
+      //Serial.println("FULL RESET");
     }
     
     // Reset TIMER
@@ -219,9 +219,9 @@ void loop() {
 //Send 0 = open
 void actuateGripper(int choice){
   if(choice == 1){ // Close gripper
-    Gripper.write(gripperHome + 70);
+    Gripper.write(170);
   }
   else{ //Open Gripper
-    Gripper.write(gripperHome);
+    Gripper.write(0);
   }
 }
