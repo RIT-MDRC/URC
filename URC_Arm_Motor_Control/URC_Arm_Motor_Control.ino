@@ -3,6 +3,7 @@
  *  MOTOR CONTROLLER: Pololu SMC G2 18v25
  */
 #include "Motor.h"
+#include <Servo.h>
 
 // VARIABLE/OBJECT DECLARATION ----------------------------------------------------------
 
@@ -21,6 +22,11 @@ const uint8_t NUM_JOINTS = 3;
 //ENCODER VARIABLES
 Encoder enc_J1(16,17);
 Encoder enc_J2(14,15);
+
+//Gripper Servo Variables
+const int gripperPin = 33;
+Servo Gripper;
+int gripperHome = 90;
 
 //MOTORS
 // minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, movement threshold
@@ -57,7 +63,13 @@ void setup() {
   pinMode(potPin,INPUT);  // Input pin for pot
   joints[2].setPosition(analogRead(potPin));
 
+<<<<<<< Updated upstream
   pinMode(resetPin,INPUT);
+=======
+  //Attach Gripper Servo
+  Gripper.attach(gripperPin);
+  gripperHome = Gripper.read();
+>>>>>>> Stashed changes
 
   // Initialize time variables
   timer = 0;
@@ -144,6 +156,10 @@ void loop() {
         setSpeed = Serial.parseFloat();
         joints[n].homing(setSpeed);
         break;
+      case 'G':
+        // Actuate Gripper
+        actuateGripper(n);
+        break;
       default:
         break;
     }
@@ -196,4 +212,16 @@ void loop() {
     joints[1].setPosition(2000);
   } else if (t > 6000) {t = 0;}
   */
+}
+
+//Function to open / close gripper
+//Send 1 = close
+//Send 0 = open
+void actuateGripper(int choice){
+  if(choice == 1){ // Close gripper
+    Gripper.write(gripperHome + 70);
+  }
+  else{ //Open Gripper
+    Gripper.write(gripperHome);
+  }
 }
