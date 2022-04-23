@@ -20,6 +20,8 @@ class Client:
         moveAmount = 0
 
         lastHatValue = 0
+        
+        gripperState = 0
 
         while not self.terminated:
             for event in pygame.event.get():
@@ -52,12 +54,19 @@ class Client:
                     jointNum -= 1
                 if hat[1] == 0:
                     lastHatValue = 0
-                message = "\"command\"" + ":\"M{} {}\"".format(jointNum, moveAmount)
-                message = '{' + message + '}'
-                self.send_socket.send(message.encode())
-                print(message)
+                    
+                if event.type == pygame.JOYBUTTONDOWN or event.type == pygame.JOYBUTTONUP: 
+                    message2 = "\"command\"" + ":\"G{}\"".format(joystick.get_button(0))
+                    message2 = '{' + message2 + '}'
+                    self.send_socket.send(message2.encode())                
+                    print(message2)
+                elif event.type == pygame.JOYAXISMOTION:
+                    message = "\"command\"" + ":\"M{} {}\"".format(jointNum, moveAmount)
+                    message = '{' + message + '}'
+                    self.send_socket.send(message.encode())
+                    print(message)
 
-                clock.tick(20)
+            clock.tick(20)
 
 def main():
     client = Client()
