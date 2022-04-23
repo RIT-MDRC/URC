@@ -14,6 +14,8 @@ int t = 0;
 //POTENTIOMETER VARIABLES
 const int potPin = 41;
 
+const int resetPin = 23;
+
 const uint8_t NUM_JOINTS = 3;
 
 //ENCODER VARIABLES
@@ -54,6 +56,8 @@ void setup() {
   // Initialize linear actuator potentiometer feedback
   pinMode(potPin,INPUT);  // Input pin for pot
   joints[2].setPosition(analogRead(potPin));
+
+  pinMode(resetPin,INPUT);
 
   // Initialize time variables
   timer = 0;
@@ -169,10 +173,20 @@ void loop() {
       //Serial.println("DISABLED");
     }
     */
+
+    // Check if reset button is pressed, reset every joint and set all state variables to zero
+    if (digitalRead(resetPin) == HIGH) {
+      for (int i = 0; i < NUM_JOINTS; i++) {joints[i].reset();}
+      enc_J1.write(0);
+      enc_J2.write(0);
+      joints[2].setPosition(analogRead(potPin));
+      Serial.print("FULL RESET");
+    }
     
     // Reset TIMER
     timer = 0;
   }
+  
 /*
   if (t < 3000) {
     joints[0].setPosition(500);
