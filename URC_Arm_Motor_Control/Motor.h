@@ -7,18 +7,21 @@ class Motor {
   public:
     // CONTRUCTION
     Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deciveNum, float defaultSpeed, float defaultAccel, float moveThreshold);
+    
     // I2C COMMUNICATION
     void exitSafeStart();  // Initialize controller
     void sendMotorSpeed(int16_t speed);  // Send cmdSpeed to controller
-
-    void moveMotor(int16_t speed); //Send a modified speed to controller based on max positions
-    
     uint16_t readUpTime();
+    
+    void moveMotor(int16_t speed); //Send a modified speed to controller based on max positions
     // POSITION CONTROL
     void setPosition(float newPos);    // Interpret user input and determine new direction to go
+    void setDirection(float newPos);   // Based on desired position, which way do we go?
     bool setMaxSpeed(float newSpeed);  // Check if user input is within acceptable bounds
     void interpretEncoder(float newPos); // Take in encoder reading and interpret
     float applyAccel(); // Speed control of motor based on Newton's 2nd Law
+    void homing(int16_t dir); //Home motor joint by moving at a slow speed.
+    
     // MISC FUNCTIONS
     void print(); // Print state to the serial moniter
     void reset(); // Reset I2C communication with driver
@@ -50,12 +53,18 @@ class Motor {
     // MOTOR VARIABLES
     float currSpeed;      // Speed being sent to motor controller
     float cmdSpeed;       // Max speed commanded by user
+    
     float accel;    // Maximum change in speed per clock cycle
+    
     float encoderSpeed;   // Actual speed of motor
     float encoderAccel;   // Actual accel of motor
+    
     float currPos;        // Current position of the motor
     float cmdPos;         // Position commanded by user
+    float offsetPos;      // Offset from real position and position stored in encoder object
+    
     int dir_speed;    // Which way is motor going?
     int dir_accel;    // Which way is motor trying to go?
+    
     float stopDist;   // How long will it take to motor come to a halt based on current accel
 };

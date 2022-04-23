@@ -21,10 +21,10 @@ Encoder enc_J1(16,17);
 Encoder enc_J2(14,15);
 
 //MOTORS
-// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, movement threshold
+// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, movement threshold
 Motor J1(-90, 90, 1482.6, 2.5, 13, 500, 50, 30);  // RATIO = 75 : 30
-Motor J2(0, 45, 1669.656, 15, 14, 1500, 150, 30); //RATIO = 15 : 1
-Motor J3(0, 360, 1, 1, 15, 3200, 200, 20);
+Motor J2(-10, 80, 1669.656, 30, 14, 2000, 100, 30); //RATIO = 15 : 1
+Motor J3(670, 860, 360, 1, 15, 3200, 200, 20);
 
 Motor joints[NUM_JOINTS] = {J1, J2, J3};
 
@@ -51,7 +51,9 @@ void setup() {
   Serial.begin(115200);
   Serial.setTimeout(10);
 
-  pinMode(potPin,INPUT);
+  // Initialize linear actuator potentiometer feedback
+  pinMode(potPin,INPUT);  // Input pin for pot
+  joints[2].setPosition(analogRead(potPin));
 
   // Initialize time variables
   timer = 0;
@@ -68,7 +70,6 @@ void loop() {
   t += newTIME - TIME;
   // Store current time in TIME variable to use next loop
   TIME = newTIME;
-
 // READING COMMAND FROM SERIAL ***********************************************************
   /* Commands expected as:
    *    DESIGNATOR_CHAR VALUE
@@ -104,11 +105,29 @@ void loop() {
         }
         break;
       case 'R':
-        joints[n].exitSafeStart();
+        // Reset motor driver and set position and speed to zero
+        joints[n].reset();
+
+        switch (n) {
+          case 0:
+            enc_J1.write(0);
+            break;
+          case 1:
+            enc_J2.write(0);
+            break;
+          case 2:
+            joints[n].setPosition(analogRead(potPin));
+            break;
+        }
+        Serial.print("RESET ");
+        Serial.println(n+1);
+        
         break;
       case 'Q':
-        // Print motor status
-        setPos = Serial.parseFloat();
+        // Print status of motor
+        Serial.print("JOINT ");
+        Serial.print(n+1);
+        Serial.print(": ");
         joints[n].print();
         break;
       case 'M':
@@ -116,11 +135,16 @@ void loop() {
         setSpeed = Serial.parseFloat();
         joints[n].moveMotor(setSpeed);
         break;
+      case 'H':
+        //Home Motor
+        setSpeed = Serial.parseFloat();
+        joints[n].homing(setSpeed);
+        break;
       default:
         break;
     }
   }
-
+  
 // ENCODER READING AND DECODING **********************************************************
   // If enough time has passed ...
   if (timer >= 20) {
@@ -131,6 +155,8 @@ void loop() {
     for (int n = 0; n < NUM_JOINTS; n++) {
       joints[n].interpretEncoder(newPos[n]);
     }
+
+    /* POSITION ALGORITHM - Doesn't work well
     // Check if the Emergency Stop Button has been pressed
     if (digitalRead(23) == 1) {
       //Serial.println("ENABLED");
@@ -142,6 +168,7 @@ void loop() {
       for (int n = 0; n < NUM_JOINTS; n++) {joints[n].sendMotorSpeed(0);}
       //Serial.println("DISABLED");
     }
+    */
     
     // Reset TIMER
     timer = 0;
@@ -155,5 +182,4 @@ void loop() {
     joints[1].setPosition(2000);
   } else if (t > 6000) {t = 0;}
   */
-
 }

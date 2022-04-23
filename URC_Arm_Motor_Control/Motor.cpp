@@ -5,11 +5,11 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
      this->PULSE_PER_REV = pulses;
      this->GEAR_RATIO = ratio;
      this->I2C_NUM = deviceNum;   // I2C Device # of motor controller
+     this->MOVE_THRESHOLD = moveThreshold;
 
     // Convert limits from degrees to encoder pulses
-     this->MIN_POS = minPos_degrees / 360 * pulses * ratio;
-     this->MAX_POS = minPos_degrees / 360 * pulses * ratio;
-     this->MOVE_THRESHOLD = moveThreshold;
+     this->MIN_POS = degToPulse(minPos_degrees);
+     this->MAX_POS = degToPulse(maxPos_degrees);
 
     // Initialize motion contrainsts to defaults
      this->cmdSpeed = defaultSpeed;
@@ -34,7 +34,8 @@ void Motor::exitSafeStart() {
   Wire.endTransmission();
 }
 
-// Set motor speed (between 0 and 3200) and direction
+// Set motor speed and direction
+// INPUT: Motor speed [between 0 and 3200]
 void Motor::sendMotorSpeed(int16_t speed) {
   uint8_t cmd = 0x85;  // Motor forward
   if (speed < 0)  {
@@ -48,43 +49,6 @@ void Motor::sendMotorSpeed(int16_t speed) {
   Wire.write(speed >> 5 & 0x7F);
   Wire.endTransmission();
 }
-
-//Send a modified speed to controller based on max positions
-void Motor::moveMotor(int16_t speed) {
-  float dPos = 0;
-  float nPos = 0;
-  int16_t nSpeed = 0;
-
-  if(speed > 0){
-    dPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
-  }
-  else if(speed < 0){
-    dPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
-  }
-  else{
-    dPos = -1*getMoveThreshold();  // 0 Speed
-  }
-
-  if(dPos > 0){
-    nPos = PI/2;
-  }
-  else{
-    nPos = map(abs(dPos), 0, getMoveThreshold(), PI/2, 0);
-  }
-  
-  int16_t maxSpeed = (-cos(nPos) + 1) * 100 * (speed / abs(speed));
-
-  if(speed > maxSpeed){
-    nSpeed = maxSpeed;
-  }
-  else{
-    nSpeed = speed;
-  }
-
-  this->sendMotorSpeed(nSpeed);
-}
-
-
  
 uint16_t Motor::readUpTime() {
   Wire.beginTransmission(this->I2C_NUM);
@@ -97,12 +61,14 @@ uint16_t Motor::readUpTime() {
   return upTime;
 }
 
+// Sets the new desired position of the motor after checking if within limits
+// INPUT: Desired position [in degrees]
 void Motor::setPosition(float newPos_degrees) {
   // Convert desired position from degrees to encoder pulses
-  float newPos = newPos_degrees / 360 * this->PULSE_PER_REV * this->GEAR_RATIO;
+  float newPos = degToPulse(newPos_degrees);
 
   // Check if desired position is within safe limits
-  if (newPos <= this->MAX_POS || newPos >= this->MIN_POS) {
+  if (newPos <= this->MAX_POS && newPos >= this->MIN_POS) {
     // If desired position is in the safe range, set command position to desired position
     this->cmdPos = newPos;
   } else if (newPos > this->MAX_POS) {
@@ -113,8 +79,16 @@ void Motor::setPosition(float newPos_degrees) {
     this->cmdPos = this->MIN_POS;
   } else {
     // If you're here, something has gone terribly wrong
+    Serial.println("Why are you here?");
     return;
   }
+
+  this->setDirection(this->cmdPos);
+}
+
+// Checks which direction to go based on provided position
+// INPUT: position [in encoder pulses]
+void Motor::setDirection(float newPos) {
   // Determine which direction to go
   if (this->currPos > newPos) {
     this->dir_speed = this->REVERSE;
@@ -126,6 +100,9 @@ void Motor::setPosition(float newPos_degrees) {
   //print();
 }
 
+// Set the new maximum allowable speed for the motor
+// INPUT: desired speed [between 0 and 3200]
+// OUTPUT: Can the desired speed be allowed? [True or False]
 bool Motor::setMaxSpeed(float newSpeed) {
   if (abs(newSpeed) <= this->ABS_MAX_SPEED) {
      this->cmdSpeed = abs(newSpeed);
@@ -134,6 +111,8 @@ bool Motor::setMaxSpeed(float newSpeed) {
   return false;
 }
 
+// Determine velocity and accelerations [in pulses per code loop] based on encoder readings
+// INPUT: new position reading of the encoder
 void Motor::interpretEncoder(float newPos) {
   // Read the new postion of the motor encoder and calculate change since last cycle
   float last_encoderSpeed = this->encoderSpeed;
@@ -157,13 +136,54 @@ void Motor::interpretEncoder(float newPos) {
   } else {this->stopDist = 0;}
 }
 
+// Send a modified speed to controller based on max positions
+// INPUT: motor speed [between 0 and 3200]
+void Motor::moveMotor(int16_t speed) {
+  float dPos = 0;
+  float nPos = 0;
+  int16_t nSpeed = 0;
+
+  if(speed > 0){
+    dPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
+  } else if (speed < 0) {
+    dPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
+  } else {
+    dPos = -1 * getMoveThreshold();  // 0 Speed
+  }
+
+  if(dPos > 0){
+    nPos = PI/2;
+  } else {
+    nPos = map(abs(dPos), 0, getMoveThreshold(), PI/2, 0);
+  }
+  
+  int16_t maxSpeed = (-cos(nPos) + 1) * 100 * (speed / abs(speed));
+  
+  if(speed > maxSpeed){
+    nSpeed = maxSpeed;
+  } else {
+    nSpeed = speed;
+  }
+
+  this->sendMotorSpeed(nSpeed);
+}
+
+// Apply the motor acceleration using Newton's 2nd Law of Motion towards desired position
 float Motor::applyAccel() {
+
+  // HARD LIMITS
+  // If motor is beyond max safe limits, arm is stationary until reset or manually homed
+  if (this->currPos > this->MAX_POS*1.1 || this->currPos < this->MIN_POS*1.1) {
+    this->currSpeed = 0;
+    return currSpeed;
+  }
+  
   // Check if motor is close enough to position
   if (abs(this->currPos - this->cmdPos) >= 10) {
     
     // Check if motor has overshot desired position and reverse direction if needed
-    if (this->currPos > this->cmdPos && this->dir_speed == this->FORWARD) {this->setPosition(this->cmdPos);Serial.println("WORKS");}
-    if (this->currPos < this->cmdPos && this->dir_speed == this->REVERSE) {this->setPosition(this->cmdPos);Serial.println("MAYBE WORKS");}
+    if (this->currPos > this->cmdPos && this->dir_speed == this->FORWARD) {this->setDirection(this->cmdPos);Serial.println("WORKS");}
+    if (this->currPos < this->cmdPos && this->dir_speed == this->REVERSE) {this->setDirection(this->cmdPos);Serial.println("MAYBE WORKS");}
     
     // Calculate new speed after acceleration and put it in buffer
     float buf_speed = this->currSpeed + (this->accel * (float)this->dir_accel);
@@ -200,6 +220,19 @@ float Motor::applyAccel() {
   }
   this->currSpeed = 0;
   return 0;
+}
+
+//Home motor joint by moving at a slow speed.
+void Motor::homing(int16_t dir)  {
+  if(dir > 0){
+    sendMotorSpeed(10);
+  }
+  else if(dir < 0){
+    sendMotorSpeed(-10);
+  }
+  else{
+    sendMotorSpeed(0);
+  }
 }
 
 void Motor::reset() {
