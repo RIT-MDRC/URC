@@ -24,8 +24,6 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
      this->currPos = 0;
      this->cmdPos = 0;
      this->stopDist = 0;
-
-     this->current_speed = 0;
 }
 
 // Required to allow motors to move.
@@ -139,15 +137,15 @@ void Motor::interpretEncoder(float newPos) {
 }
 
 // Send a modified speed to controller based on max positions
-// INPUT: motor speed [between 0 and 3200]
-void Motor::moveMotor(int16_t speed) {
+// INPUT: percent of max motor speed [-100 to 100]
+void Motor::moveMotor(int16_t percent) {
   float dPos = 0;
   float nPos = 0;
-  int16_t nSpeed = 0;
+  int16_t nPercent = 0;
 
-  if(speed > 0){
+  if(percent > 0){
     dPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
-  } else if (speed < 0) {
+  } else if (percent < 0) {
     dPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
   } else {
     dPos = -1 * getMoveThreshold();  // 0 Speed
@@ -159,16 +157,17 @@ void Motor::moveMotor(int16_t speed) {
     nPos = map(abs(dPos), 0, getMoveThreshold(), PI/2, 0);
   }
   
-  int16_t maxSpeed = (-cos(nPos) + 1) * 100 * (speed / abs(speed));
+  int16_t maxPercent = (-cos(nPos) + 1) * 100 * this->dir_speed;
   
-  if(speed > maxSpeed){
-    nSpeed = maxSpeed;
+  if(percent > maxPercent){
+    nPercent = maxPercent;
   } else {
-    nSpeed = speed;
+    nPercent = percent;
   }
-  
-  this->current_speed = nSpeed;
-  this->sendMotorSpeed(nSpeed);
+
+  this->percent_speed = nPercent; 
+  this->currSpeed = nPercent / 100 * this->cmdSpeed;
+  this->sendMotorSpeed(currSpeed);
 }
 
 // Apply the motor acceleration using Newton's 2nd Law of Motion towards desired position
@@ -228,10 +227,10 @@ float Motor::applyAccel() {
 //Home motor joint by moving at a slow speed.
 void Motor::homing(int16_t dir)  {
   if(dir > 0){
-    sendMotorSpeed(10);
+    sendMotorSpeed(0.1*this->cmdSpeed);
   }
   else if(dir < 0){
-    sendMotorSpeed(-10);
+    sendMotorSpeed(-0.1*this->cmdSpeed);
   }
   else{
     sendMotorSpeed(0);
@@ -252,15 +251,13 @@ void Motor::print() {
   Serial.print(",");
   Serial.print(this->currSpeed);
   Serial.print(",");
-  Serial.print(this->encoderSpeed);
-  Serial.print(",");
-  Serial.print(this->cmdSpeed);
+  Serial.println(this->cmdSpeed);
+  /*
   Serial.print(",");
   Serial.print(this->dir_speed);
   Serial.print(",");
   Serial.println(this->dir_accel);
-  Serial.print(",");
-  Serial.println(this->current_speed);
+  */
 }
 
 //Getter funcs for private vars
