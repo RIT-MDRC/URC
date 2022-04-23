@@ -143,6 +143,7 @@ void Motor::moveMotor(int16_t percent) {
   float nPos = 0;
   int16_t nPercent = 0;
 
+  //Calculate the difference between the current position and the endstop threshold which the arm would be moving towards
   if(percent > 0){
     dPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
   } else if (percent < 0) {
@@ -151,6 +152,7 @@ void Motor::moveMotor(int16_t percent) {
     dPos = -1 * getMoveThreshold();  // 0 Speed
   }
 
+  //If negative, can go full speed, otherwise calculate a cosine interpolation speed
   if(dPos > 0){
     nPos = PI/2;
   } else {
@@ -158,13 +160,15 @@ void Motor::moveMotor(int16_t percent) {
   }
   
   int16_t maxPercent = (-cos(nPos) + 1) * 100 * this->dir_speed;
-  
+
+  //If the requested speed is acceptable, use it, otherwise use the calculated max speed
   if(percent > maxPercent){
     nPercent = maxPercent;
   } else {
     nPercent = percent;
   }
 
+  //Convert and send
   this->percent_speed = nPercent; 
   this->currSpeed = nPercent / 100 * this->cmdSpeed;
   this->sendMotorSpeed(currSpeed);
