@@ -30,7 +30,7 @@ int gripperHome = 90;
 
 //MOTORS
 // minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, movement threshold
-Motor J1(-90, 90, 1482.6, 2.5, 13, 500, 50, 30);  // RATIO = 75 : 30
+Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 60, 30);  // RATIO = 75 : 30
 Motor J2(-10, 80, 1669.656, 30, 14, 2000, 100, 30); //RATIO = 15 : 1
 Motor J3(670, 860, 360, 1, 15, 3200, 200, 20);
 
@@ -192,7 +192,10 @@ void loop() {
 
     // Check if reset button is pressed, reset every joint and set all state variables to zero
     if (digitalRead(resetPin) == HIGH) {
-      for (int i = 0; i < NUM_JOINTS; i++) {joints[i].reset();}
+      for (int i = 0; i < NUM_JOINTS; i++) {
+        joints[i].reset();
+        joints[i].sendMotorSpeed(0);
+      }
       enc_J1.write(0);
       enc_J2.write(0);
       joints[2].setPosition(analogRead(potPin));
