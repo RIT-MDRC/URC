@@ -20,6 +20,7 @@ class Motor {
     bool setMaxSpeed(float newSpeed);  // Check if user input is within acceptable bounds
     void interpretEncoder(float newPos); // Take in encoder reading and interpret
     float applyAccel(); // Speed control of motor based on Newton's 2nd Law
+    void homing(int16_t dir); //Home motor joint by moving at a slow speed.
     
     // MISC FUNCTIONS
     void print(); // Print state to the serial moniter

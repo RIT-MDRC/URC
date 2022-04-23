@@ -1,14 +1,8 @@
 import pygame
 
-
-# Define some colors.
 BLACK = pygame.Color('black')
 WHITE = pygame.Color('white')
 
-
-# This is a simple class that will help us print to the screen.
-# It has nothing to do with the joysticks, just outputting the
-# information.
 class TextPrint(object):
     def __init__(self):
         self.reset()
@@ -33,122 +27,72 @@ class TextPrint(object):
 
 pygame.init()
 
-# Set the width and height of the screen (width, height).
-screen = pygame.display.set_mode((500, 700))
+# screen = pygame.display.set_mode((500, 700))
 
-pygame.display.set_caption("My Game")
+# pygame.display.set_caption("My Game")
 
-# Loop until the user clicks the close button.
 done = False
 
-# Used to manage how fast the screen updates.
 clock = pygame.time.Clock()
 
-# Initialize the joysticks.
 pygame.joystick.init()
 
-# Get ready to print.
-textPrint = TextPrint()
+# textPrint = TextPrint()
 
-# -------- Main Program Loop -----------
+jointNum = 1
+moveAmount = 0
+
+lastHatValue = 0
+
 while not done:
-    #
-    # EVENT PROCESSING STEP
-    #
-    # Possible joystick actions: JOYAXISMOTION, JOYBALLMOTION, JOYBUTTONDOWN,
-    # JOYBUTTONUP, JOYHATMOTION
-    for event in pygame.event.get(): # User did something.
-        if event.type == pygame.QUIT: # If user clicked close.
-            done = True # Flag that we are done so we exit this loop.
-        elif event.type == pygame.JOYBUTTONDOWN:
-            print("Joystick button pressed.")
-        elif event.type == pygame.JOYBUTTONUP:
-            print("Joystick button released.")
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            done = True
 
-    #
-    # DRAWING STEP
-    #
-    # First, clear the screen to white. Don't put other drawing commands
-    # above this, or they will be erased with this command.
-    screen.fill(WHITE)
-    textPrint.reset()
 
-    # Get count of joysticks.
-    joystick_count = pygame.joystick.get_count()
+#     screen.fill(WHITE)
+#     textPrint.reset()
 
-    textPrint.tprint(screen, "Number of joysticks: {}".format(joystick_count))
-    textPrint.indent()
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
 
-    # For each joystick:
-    for i in range(joystick_count):
-        joystick = pygame.joystick.Joystick(i)
-        joystick.init()
+    try:
+        jid = joystick.get_instance_id()
+    except AttributeError:
+        jid = joystick.get_id()
 
-        try:
-            jid = joystick.get_instance_id()
-        except AttributeError:
-            # get_instance_id() is an SDL2 method
-            jid = joystick.get_id()
-        textPrint.tprint(screen, "Joystick {}".format(jid))
-        textPrint.indent()
 
-        # Get the name from the OS for the controller/joystick.
-        name = joystick.get_name()
-        textPrint.tprint(screen, "Joystick name: {}".format(name))
 
-        try:
-            guid = joystick.get_guid()
-        except AttributeError:
-            # get_guid() is an SDL2 method
-            pass
-        else:
-            textPrint.tprint(screen, "GUID: {}".format(guid))
+    leftTrigger = joystick.get_axis(2)
+    rightTrigger = joystick.get_axis(5)
+    if leftTrigger > 0 and rightTrigger > 0:
+        moveAmount = 0
+    elif leftTrigger > 0:
+        moveAmount = -50
+    elif rightTrigger > 0:
+        moveAmount = 50
+    else:
+        moveAmount = 0
 
-        # Usually axis run in pairs, up/down for one, and left/right for
-        # the other.
-        axes = joystick.get_numaxes()
-        textPrint.tprint(screen, "Number of axes: {}".format(axes))
-        textPrint.indent()
+    hat = joystick.get_hat(0)
+    if lastHatValue != hat[1] and hat[1] == 1 and jointNum != 3:
+        lastHatValue = 1
+        jointNum += 1
+    elif lastHatValue != hat[1] and hat[1] == -1 and jointNum != 1:
+        lastHatValue = -1
+        jointNum -= 1
+    elif hat[1] == 0:
+        lastHatValue = 0
+        
+    
+    gripperState = joystick.get_button(0)
+#     textPrint.unindent()
+    
+#     textPrint.tprint(screen, "M{} {}".format(jointNum, moveAmount))
+    print("M{} {}".format(jointNum, moveAmount))
 
-        for i in range(axes):
-            axis = joystick.get_axis(i)
-            textPrint.tprint(screen, "Axis {} value: {:>6.3f}".format(i, axis))
-        textPrint.unindent()
+#     pygame.display.flip()
 
-        buttons = joystick.get_numbuttons()
-        textPrint.tprint(screen, "Number of buttons: {}".format(buttons))
-        textPrint.indent()
-
-        for i in range(buttons):
-            button = joystick.get_button(i)
-            textPrint.tprint(screen,
-                             "Button {:>2} value: {}".format(i, button))
-        textPrint.unindent()
-
-        hats = joystick.get_numhats()
-        textPrint.tprint(screen, "Number of hats: {}".format(hats))
-        textPrint.indent()
-
-        # Hat position. All or nothing for direction, not a float like
-        # get_axis(). Position is a tuple of int values (x, y).
-        for i in range(hats):
-            hat = joystick.get_hat(i)
-            textPrint.tprint(screen, "Hat {} value: {}".format(i, str(hat)))
-        textPrint.unindent()
-
-        textPrint.unindent()
-
-    #
-    # ALL CODE TO DRAW SHOULD GO ABOVE THIS COMMENT
-    #
-
-    # Go ahead and update the screen with what we've drawn.
-    pygame.display.flip()
-
-    # Limit to 20 frames per second.
     clock.tick(20)
 
-# Close the window and quit.
-# If you forget this line, the program will 'hang'
-# on exit if running from IDLE.
 pygame.quit()

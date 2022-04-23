@@ -3,6 +3,7 @@
  *  MOTOR CONTROLLER: Pololu SMC G2 18v25
  */
 #include "Motor.h"
+#include <Servo.h>
 
 // VARIABLE/OBJECT DECLARATION ----------------------------------------------------------
 
@@ -14,11 +15,18 @@ int t = 0;
 //POTENTIOMETER VARIABLES
 const int potPin = 41;
 
+const int resetPin = 23;
+
 const uint8_t NUM_JOINTS = 3;
 
 //ENCODER VARIABLES
 Encoder enc_J1(16,17);
 Encoder enc_J2(14,15);
+
+//Gripper Servo Variables
+const int gripperPin = 33;
+Servo Gripper;
+int gripperHome = 90;
 
 //MOTORS
 // minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, movement threshold
@@ -54,6 +62,12 @@ void setup() {
   // Initialize linear actuator potentiometer feedback
   pinMode(potPin,INPUT);  // Input pin for pot
   joints[2].setPosition(analogRead(potPin));
+
+  pinMode(resetPin,INPUT);
+  
+  //Attach Gripper Servo
+  Gripper.attach(gripperPin);
+  gripperHome = Gripper.read();
 
   // Initialize time variables
   timer = 0;
@@ -137,6 +151,15 @@ void loop() {
         setSpeed = Serial.parseFloat();
         joints[n].moveMotor(setSpeed);
         break;
+      case 'H':
+        //Home Motor
+        setSpeed = Serial.parseFloat();
+        joints[n].homing(setSpeed);
+        break;
+      case 'G':
+        // Actuate Gripper
+        actuateGripper(n);
+        break;
       default:
         break;
     }
@@ -166,10 +189,20 @@ void loop() {
       //Serial.println("DISABLED");
     }
     */
+
+    // Check if reset button is pressed, reset every joint and set all state variables to zero
+    if (digitalRead(resetPin) == HIGH) {
+      for (int i = 0; i < NUM_JOINTS; i++) {joints[i].reset();}
+      enc_J1.write(0);
+      enc_J2.write(0);
+      joints[2].setPosition(analogRead(potPin));
+      Serial.print("FULL RESET");
+    }
     
     // Reset TIMER
     timer = 0;
   }
+  
 /*
   if (t < 3000) {
     joints[0].setPosition(500);
@@ -179,4 +212,16 @@ void loop() {
     joints[1].setPosition(2000);
   } else if (t > 6000) {t = 0;}
   */
+}
+
+//Function to open / close gripper
+//Send 1 = close
+//Send 0 = open
+void actuateGripper(int choice){
+  if(choice == 1){ // Close gripper
+    Gripper.write(gripperHome + 70);
+  }
+  else{ //Open Gripper
+    Gripper.write(gripperHome);
+  }
 }
