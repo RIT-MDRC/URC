@@ -84,8 +84,8 @@ while not done:
     elif hat[1] == 0:
         lastHatValue = 0
         
+    
     gripperState = joystick.get_button(0)
-    print(gripperState)
 #     textPrint.unindent()
     
 #     textPrint.tprint(screen, "M{} {}".format(jointNum, moveAmount))
