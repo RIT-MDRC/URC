@@ -24,6 +24,8 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
      this->currPos = 0;
      this->cmdPos = 0;
      this->stopDist = 0;
+
+     this->current_speed = 0;
 }
 
 // Required to allow motors to move.
@@ -164,7 +166,8 @@ void Motor::moveMotor(int16_t speed) {
   } else {
     nSpeed = speed;
   }
-
+  
+  this->current_speed = nSpeed;
   this->sendMotorSpeed(nSpeed);
 }
 
@@ -243,6 +246,8 @@ void Motor::print() {
   Serial.print(this->dir_speed);
   Serial.print(",");
   Serial.println(this->dir_accel);
+  Serial.print(",");
+  Serial.println(this->current_speed);
 }
 
 //Getter funcs for private vars

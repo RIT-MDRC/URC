@@ -66,4 +66,6 @@ class Motor {
     int dir_accel;    // Which way is motor trying to go?
     
     float stopDist;   // How long will it take to motor come to a halt based on current accel
+
+    uint16_t current_speed; // variable to see the current speed
 };
