@@ -60,11 +60,11 @@ class Server:
 """
 
 def send_to_board(message):
-    ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
-    ser.reset_input_buffer()
+    #ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+    #ser.reset_input_buffer()
     print(message)
 #    while True:
-    ser.write(bytes(message, 'utf-8'))
+    #ser.write(bytes(message, 'utf-8'))
 #        line = ser.readline().decode('utf-8').rstrip()
 #        print(line)
 #        time.sleep(1)
