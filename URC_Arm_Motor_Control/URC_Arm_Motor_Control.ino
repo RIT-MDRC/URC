@@ -63,13 +63,11 @@ void setup() {
   pinMode(potPin,INPUT);  // Input pin for pot
   joints[2].setPosition(analogRead(potPin));
 
-<<<<<<< Updated upstream
   pinMode(resetPin,INPUT);
-=======
+  
   //Attach Gripper Servo
   Gripper.attach(gripperPin);
   gripperHome = Gripper.read();
->>>>>>> Stashed changes
 
   // Initialize time variables
   timer = 0;
