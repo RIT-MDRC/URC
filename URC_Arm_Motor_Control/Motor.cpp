@@ -138,39 +138,37 @@ void Motor::interpretEncoder(float newPos) {
 
 // Send a modified speed to controller based on max positions
 // INPUT: percent of max motor speed [-100 to 100]
-void Motor::moveMotor(int16_t percent) {
-  float dPos = 0;
+void Motor::moveMotor(int16_t newPercent) {
+  float deltaPos = 0;
   float nPos = 0;
-  float nPercent = 0;
 
   //Calculate the difference between the current position and the endstop threshold which the arm would be moving towards
-  if(percent > 0){
-    dPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
-  } else if (percent < 0) {
-    dPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
+  if(newPercent > 0){
+    deltaPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
+  } else if (newPercent < 0) {
+    deltaPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
   } else {
-    dPos = -1 * getMoveThreshold();  // 0 Speed
+    deltaPos = -1 * getMoveThreshold();  // 0 Speed
   }
 
   //If negative, can go full speed, otherwise calculate a cosine interpolation speed
-  if(dPos > 0){
+  if(deltaPos > 0){
     nPos = PI/2;
   } else {
-    nPos = map(abs(dPos), 0, getMoveThreshold(), PI/2, 0);
+    nPos = map(abs(deltaPos), 0, getMoveThreshold(), PI/2, 0);
   }
   
   float maxPercent = (-cos(nPos) + 1) * 100 * this->dir_speed;
 
   //If the requested speed is acceptable, use it, otherwise use the calculated max speed
-  if(percent > maxPercent){
-    nPercent = maxPercent;
+  if(newPercent > maxPercent){
+    this->percent_speed = maxPercent;
   } else {
-    nPercent = percent;
+    this->percent_speed = newPercent;
   }
 
-  //Convert and send
-  this->percent_speed = nPercent; 
-  this->currSpeed = nPercent / 100 * this->cmdSpeed;
+  //Convert and send 
+  this->currSpeed = newPercent / 100 * this->cmdSpeed;
   this->sendMotorSpeed(currSpeed);
 }
 
