@@ -134,39 +134,44 @@ void Motor::interpretEncoder(float newPos) {
 void Motor::moveMotor(float newPercent) {
   float deltaPos = 0;
   float nPos = 0;
+  float percent_speed = 0;
 
   //Calculate the difference between the current position and the endstop threshold which the arm would be moving towards
   if(newPercent > 0){
-    deltaPos = (getMaxPos() - getMoveThreshold()) - getCurrPos(); //neg if within threshold, otherwise positive distance
+    deltaPos = (this->getMaxPos() - this->getMoveThreshold()) - this->getCurrPos(); //neg if within threshold, otherwise positive distance
   } else if (newPercent < 0) {
-    deltaPos = getCurrPos() - (getMoveThreshold() - getMinPos()); //neg if within threshold, otherwise positive distance
+    deltaPos = this->getCurrPos() - (this->getMinPos() + this->getMoveThreshold()); //neg if within threshold, otherwise positive distance
   } else {
-    deltaPos = -1 * getMoveThreshold();  // 0 Speed
+    deltaPos = -1 * this->getMoveThreshold();  // 0 Speed
   }
 
   //If negative, can go full speed, otherwise calculate a cosine interpolation speed
   if(deltaPos > 0){
     nPos = PI/2;
   } else {
-    nPos = map(abs(deltaPos), 0, getMoveThreshold(), PI/2, 0);
+    nPos = map(abs(deltaPos), 0, this->getMoveThreshold(), PI/2, 0);
   }
   
-  float maxPercent = (-cos(nPos) + 1) * 100 * this->dir_speed;
+  float maxPercent = (-cos(nPos) + 1) * 100 * abs(newPercent)/newPercent;
 
   //If the requested speed is acceptable, use it, otherwise use the calculated max speed
-  if(newPercent > maxPercent){
-    this->percent_speed = maxPercent;
+  if(abs(newPercent) > abs(maxPercent)){
+    percent_speed = maxPercent;
   } else {
-    this->percent_speed = newPercent;
+    percent_speed = newPercent;
   }
 
+  Serial.print(percent_speed);
+  Serial.print(" , ");
+  Serial.println(maxPercent);
+  
   //Convert percent to actual speed and send 
-  this->currSpeed = newPercent / 100 * this->cmdSpeed;
+  this->currSpeed = percent_speed / 100 * this->cmdSpeed;
   this->sendMotorSpeed(currSpeed);
 }
 
 // Apply the motor acceleration using Newton's 2nd Law of Motion towards desired position
-float Motor::applyAccel() {
+float Motor::applyPID(int timer) {
 
   // SAFETY LIMITS
   // If motor is beyond max safe limits, arm is stationary until reset or manually homed
@@ -179,6 +184,8 @@ float Motor::applyAccel() {
    PID CONTROLLER GOES HERE
  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  */
+  
+ 
   return currSpeed;
 }
 

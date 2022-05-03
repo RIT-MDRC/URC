@@ -20,9 +20,12 @@ class Motor {
     void setDirection(float newPos);     // Based on desired position, which way do we go?
     bool setMaxSpeed(float newSpeed);    // Set the maximum allowable speed of the motor and check if user input is within acceptable bounds
     void interpretEncoder(float newPos); // Take in encoder reading and interpret
-    float applyAccel();                  // Speed control of motor based on Newton's 2nd Law
     void homing(int16_t dir);            // Home motor joint by moving at a slow speed and ignoring software limits on position.
     float degToPulse(float deg);         // Calculate encoder position from degrees
+
+    // PID FUNCTIONS
+    float applyPID(int timer);                  // Apply PID to motor speed
+    void setPIDTuning(int Kp, int Ki, int Kd);  // Set coefficients for PID controller
     
     // MISC FUNCTIONS
     void print(); // Print state to the serial moniter
@@ -49,7 +52,7 @@ class Motor {
     uint8_t I2C_NUM;       // I2C Device # of motor controller
     float MIN_POS;         // Mininum safe position
     float MAX_POS;         // Maxinum safe position
-    float MOVE_THRESHOLD;  //distance in degrees from endstops for deceleration of joint
+    float MOVE_THRESHOLD;  // Distance in degrees from endstops for deceleration of joint
 
     // MOTOR VARIABLES
     float currSpeed;      // Speed being sent to motor controller
@@ -67,7 +70,6 @@ class Motor {
     int dir_speed;    // Which way is motor going?
     int dir_accel;    // Which way is motor trying to go?
     
-    float stopDist;   // How long will it take to motor come to a halt based on current accel
-
-    float percent_speed; // variable to see the current speed
+    // PID Variables
+    int Kp, Ki, Kd;
 };
