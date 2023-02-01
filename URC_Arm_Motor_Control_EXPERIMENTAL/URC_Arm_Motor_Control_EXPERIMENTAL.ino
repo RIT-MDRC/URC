@@ -48,16 +48,15 @@ Motor joints[NUM_JOINTS] = {J1, J2, J3};
   // !!!!!!!! IMPORTANT !!!!!!!!!!
 
 void setup() {
-  // Begin I2C communication
-  Wire.begin();
-  // Tell motor controller it is safe to move
-  
-  for (Motor m : joints) {m.exitSafeStart();}
-
   delay(1000);
   // Begin serial communication
   Serial.begin(115200);
   Serial.setTimeout(10);
+  
+  // Begin I2C communication
+  Wire.begin();
+  // Tell motor controller it is safe to move
+  for (Motor m : joints) {m.exitSafeStart();}
 
   // Initialize linear actuator potentiometer feedback
   pinMode(potPin,INPUT);  // Input pin for pot

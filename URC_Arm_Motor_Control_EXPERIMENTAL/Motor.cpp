@@ -31,24 +31,33 @@ void Motor::exitSafeStart() {
   Wire.beginTransmission(this->I2C_NUM);
   Wire.write(0x83);  // Exit safe start
   Wire.endTransmission();
+
+  // Output message to serial port to confirm command sent
+  Serial.print("Driver ");
+  Serial.print(this->deviceNum);
+  Serial.println(" exited safe start");
 }
 
 // Set motor speed and direction
-// INPUT: Motor speed [between 0 and 3200]
+// INPUT: Directional motor speed [between 0 and 3200]
 void Motor::sendMotorSpeed(int16_t speed) {
-  uint8_t cmd = 0x85;  // Motor forward
+  uint8_t cmd = 0x85; // Hexidecimnal code for sending FORWARD speed
+  
+  // If speed is negative, get absolute value and change I2C command to REVERSE
   if (speed < 0)  {
-    cmd = 0x86;  // Motor reverse
+    cmd = 0x86;  // Hexidecimnal code for sending REVERSE speed
     speed = (int16_t) abs(speed);
   }
 
+  // Send the command (speed must be broken into 2 pcs to fit inside write function)
   Wire.beginTransmission(this->I2C_NUM);
   Wire.write(cmd);
   Wire.write(speed & 0x1F);
   Wire.write(speed >> 5 & 0x7F);
   Wire.endTransmission();
 }
- 
+
+// Ask the driver how long motor has been active (time since exiting safe start)
 uint16_t Motor::readUpTime() {
   Wire.beginTransmission(this->I2C_NUM);
   Wire.write(0xA1);  // Command: Get variable
@@ -82,10 +91,11 @@ void Motor::setPosition(float newPos_degrees) {
     return;
   }
 
+  // Determine which direction the motor needs to go to reach target position
   this->setDirection(this->cmdPos);
 }
 
-// Checks which direction to go based on provided position
+// Checks which direction to go based on provided and current positions
 // INPUT: position [in encoder pulses]
 void Motor::setDirection(float newPos) {
   // Determine which direction to go
