@@ -30,9 +30,9 @@ int gripperHome = 90;
 
 //MOTORS
 // minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, movement threshold
-Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 60, 30);  // RATIO = 75 : 30
-Motor J2(-10, 80, 1669.656, 30, 14, 2000, 100, 30); //RATIO = 15 : 1
-Motor J3(670, 860, 360, 1, 15, 3200, 200, 50);
+Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 60);  // RATIO = 75 : 30
+Motor J2(-10, 80, 1669.656, 30, 14, 2000, 100); //RATIO = 15 : 1
+Motor J3(670, 860, 360, 1, 15, 3200, 200);
 
 Motor joints[NUM_JOINTS] = {J1, J2, J3};
 
@@ -60,7 +60,7 @@ void setup() {
 
   // Initialize linear actuator potentiometer feedback
   pinMode(potPin,INPUT);  // Input pin for pot
-  joints[2].setPosition(analogRead(potPin));
+  joints[2].setNewPosition(analogRead(potPin));
 
   pinMode(resetPin,INPUT);
   
@@ -103,7 +103,7 @@ void loop() {
       case 'P':
         // Set new command position
         setPos = Serial.parseFloat();
-        joints[n].setPosition(setPos);
+        joints[n].setNewPosition(setPos);
         
         Serial.print("POSITION: ");
         Serial.println(setPos);
@@ -130,7 +130,7 @@ void loop() {
             enc_J2.write(0);
             break;
           case 2:
-            joints[n].setPosition(analogRead(potPin));
+            joints[n].setNewPosition(analogRead(potPin));
             break;
         }
         Serial.print("RESET ");
@@ -145,10 +145,10 @@ void loop() {
         joints[n].print();
         //Serial.print(String(timer)+"\n");
         break;
-      case 'M':
-        //Move Motor
+      case 'D':
+        //Drive Motor speed directly
         setSpeed = Serial.parseFloat();
-        joints[n].moveMotor(setSpeed);
+        joints[n].driveMotor(setSpeed);
         break;
       case 'H':
         //Home Motor
@@ -175,20 +175,17 @@ void loop() {
       joints[n].interpretEncoder(newPos[n]);
     }
 
-    /* POSITION ALGORITHM - Doesn't work well
+// POSITION ALGORITHM ********************************************************************
     // Check if the Emergency Stop Button has been pressed
-    if (digitalRead(23) == 1) {
+    if (digitalRead(resetPin) == 1) {
       //Serial.println("ENABLED");
-      for (int n = 0; n < NUM_JOINTS; n++) {
-        float newSpeed = joints[n].applyAccel();
-        joints[n].sendMotorSpeed((int16_t)newSpeed);
-      }
+      for (int n = 0; n < NUM_JOINTS; n++) {joints[n].positionAlgorithm();}
     } else {
       for (int n = 0; n < NUM_JOINTS; n++) {joints[n].sendMotorSpeed(0);}
       //Serial.println("DISABLED");
     }
-    */
 
+    /*
     // Check if reset button is pressed, reset every joint and set all state variables to zero
     if (digitalRead(resetPin) == HIGH) {
       for (int i = 0; i < NUM_JOINTS; i++) {
@@ -197,9 +194,10 @@ void loop() {
       }
       enc_J1.write(0);
       enc_J2.write(0);
-      joints[2].setPosition(analogRead(potPin));
+      joints[2].setNewPosition(analogRead(potPin));
       //Serial.println("FULL RESET");
     }
+    */
     
     // Reset TIMER
     timer = 0;

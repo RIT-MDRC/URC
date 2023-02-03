@@ -1,11 +1,10 @@
 #include "Motor.h"
 
-Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel, float moveThreshold) {
+Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel) {
     // MOTOR CONSTANTS
      this->PULSE_PER_REV = pulses;
      this->GEAR_RATIO = ratio;
      this->I2C_NUM = deviceNum;   // I2C Device # of motor controller
-     this->MOVE_THRESHOLD = moveThreshold;
 
     // Convert limits from degrees to encoder pulses
      this->MIN_POS = degToPulse(minPos_degrees);
@@ -13,9 +12,7 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
 
     // Initialize motion contrainsts to defaults
      this->cmdSpeed = defaultSpeed;
-     this->accel = defaultAccel;
-     this->dir_speed =  FORWARD;
-     this->dir_accel =  FORWARD;
+     this->accel = defaultAccel;     
     
     // Initialize state variables to zero
      this->currSpeed = 0;
@@ -23,6 +20,13 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
      this->encoderAccel = 0;
      this->currPos = 0;
      this->cmdPos = 0;
+     this->initialPos = 0;
+     this->dir_travel = FORWARD;
+     this->dir_initialSpeed = FORWARD;
+
+     // Initialize flag variables to false
+     this->overshooting = false;
+     this->started_opposite = false;
 }
 
 // Required to allow motors to move.
@@ -34,7 +38,7 @@ void Motor::exitSafeStart() {
 
   // Output message to serial port to confirm command sent
   Serial.print("Driver ");
-  Serial.print(this->deviceNum);
+  Serial.print(this->I2C_NUM);
   Serial.println(" exited safe start");
 }
 
@@ -69,9 +73,9 @@ uint16_t Motor::readUpTime() {
   return upTime;
 }
 
-// Sets the new desired position of the motor after checking if within limits
+// Sets the new desired position of the motor after checking if within limits, then calculate path to reach it
 // INPUT: Desired position [in degrees]
-void Motor::setPosition(float newPos_degrees) {
+void Motor::setNewPosition(float newPos_degrees) {
   // Convert desired position from degrees to encoder pulses
   float newPos = degToPulse(newPos_degrees);
 
@@ -91,22 +95,64 @@ void Motor::setPosition(float newPos_degrees) {
     return;
   }
 
-  // Determine which direction the motor needs to go to reach target position
-  this->setDirection(this->cmdPos);
-}
+  // PRE-CALCULATE PATH TO DESIRED POSITION ---------------------------
 
-// Checks which direction to go based on provided and current positions
-// INPUT: position [in encoder pulses]
-void Motor::setDirection(float newPos) {
-  // Determine which direction to go
-  if (this->currPos > newPos) {
-    this->dir_speed = this->REVERSE;
-    this->dir_accel = this->REVERSE;
-  } else {
-    this->dir_speed = this->FORWARD;
-    this->dir_accel = this->FORWARD;
+  // Capture the current position of the motor;
+  this->initialPos = this->currPos;
+
+  // Determine direction from initial to final pos (defaults to initial vel direction when final pos is same as initial pos)
+  this->dir_travel = this->dir_initialSpeed;
+  if (this->cmdPos != this->initialPos) {
+    this->dir_travel = (this->cmdPos - this->initialPos) / abs(this->cmdPos - this->initialPos);
   }
-  //print();
+  
+  // Change in position required for motor to accelerate to and decelerate from max velocity
+  float delta_pos_MaxVel = ( 2*pow(this->cmdSpeed,2) - pow(this->encoderSpeed,2) ) / (2*this->accel);
+
+  // Change in position required to deccelerate from max velocity (with correction factor)
+  float delta_pos_MaxDeccel = pow(this->cmdSpeed,2) / (2*this->accel);
+
+  // Total distance from initial and final positions
+  float delta_pos_Total = abs(this->cmdPos - this->initialPos);
+
+  // Total distance required to stop if max speed not limited
+  float delta_pos_Deccel = (delta_pos_Total + pow(this->currSpeed,2)/(2*this->accel) ) / 2;
+
+  // Total distance required to stop from initial speed
+  float delta_pos_InstantDeccel = pow(this->currSpeed,2) / (2*this->accel);
+
+  // Default to max speed and no overshot
+  this->delta_pos_SafeStop = delta_pos_MaxDeccel;
+  this->overshooting = false;
+
+  // Is motor already in final position and sitting still?
+  if (this->currSpeed == 0 && this->cmdPos == this->initialPos) {
+    // Initial pos = final pos and initial velocity = 0
+    this->delta_pos_SafeStop = 0;
+    Serial.println(" !!! EDGE CASE: Motor is already in position and sitting still !!!");
+  
+  // Will motor overshoot position because the initial velocity is too high?
+  // Only edge case if initial velocity is in travel direction
+  } else if (delta_pos_Total < delta_pos_InstantDeccel) {
+    // Stopping distance will be half of overshot distance
+    this->delta_pos_SafeStop = (delta_pos_InstantDeccel - delta_pos_Total) / 2;
+    // Invert direction so motor immediately deccelerates
+    // If initial vel is opposite to travel direction, direction will be inverted once motor has returned to initial position (i.e. inside loop)
+    this->started_opposite = true;
+    if (this->dir_initialSpeed == this->dir_travel) {
+        this->dir_travel = -1 * this->dir_travel;
+        this->started_opposite = false;
+    }
+    // Set OVERSHOOTING flag so stopping distance is only detected coming back
+    this->overshooting = true;
+    Serial.println(" !!! EDGE CASE : Initial velocity is too high, Calculating correction for overshot !!!");
+  
+  // Does motor has enough distance to travel to speed up to and down from maximum speed
+  } else if (delta_pos_Total < delta_pos_MaxVel) {
+    // Stopping distance from max possible speed will be used
+    this->delta_pos_SafeStop = delta_pos_Deccel;
+    Serial.println("!!! EDGE CASE : Cannot reach max speed, Calculating new speed limit !!!");
+  }
 }
 
 // Set the new maximum allowable speed for the motor
@@ -139,27 +185,29 @@ void Motor::interpretEncoder(float newPos) {
   */
 }
 
-// Send a modified speed to controller based on max positions
+// User drives motor by manually specifying speed
+// Will automatically limit speed when it approaches max/min positions
 // INPUT: percent of max motor speed [-100 to 100]
-void Motor::moveMotor(float newPercent) {
+void Motor::driveMotor(float newPercent) {
   float deltaPos = 0;
   float nPos = 0;
   float percent_speed = 0;
+  float moveThreshold = this->getMaxPos() * 0.1;
 
   //Calculate the difference between the current position and the endstop threshold which the arm would be moving towards
   if(newPercent > 0){
-    deltaPos = (this->getMaxPos() - this->getMoveThreshold()) - this->getCurrPos(); //neg if within threshold, otherwise positive distance
+    deltaPos = this->getMaxPos() - moveThreshold - this->getCurrPos(); //neg if within threshold, otherwise positive distance
   } else if (newPercent < 0) {
-    deltaPos = this->getCurrPos() - (this->getMinPos() + this->getMoveThreshold()); //neg if within threshold, otherwise positive distance
+    deltaPos = this->getCurrPos() - (this->getMinPos() + moveThreshold); //neg if within threshold, otherwise positive distance
   } else {
-    deltaPos = -1 * this->getMoveThreshold();  // 0 Speed
+    deltaPos = -1 * moveThreshold;  // 0 Speed
   }
 
   //If negative, can go full speed, otherwise calculate a cosine interpolation speed
   if(deltaPos > 0){
     nPos = PI/2;
   } else {
-    nPos = map(abs(deltaPos), 0, this->getMoveThreshold(), PI/2, 0);
+    nPos = map(abs(deltaPos), 0, moveThreshold, PI/2, 0);
   }
   
   float maxPercent = (-cos(nPos) + 1) * 100 * abs(newPercent)/newPercent;
@@ -180,23 +228,36 @@ void Motor::moveMotor(float newPercent) {
   this->sendMotorSpeed(currSpeed);
 }
 
-// Apply the motor acceleration using Newton's 2nd Law of Motion towards desired position
-float Motor::applyPID(int timer) {
-
-  // SAFETY LIMITS
-  // If motor is beyond max safe limits, arm is stationary until reset or manually homed
-  if (this->currPos > this->MAX_POS*1.1 || this->currPos < this->MIN_POS*1.1) {
-    this->currSpeed = 0;
-    return currSpeed;
-  }
-/* 
- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-   PID CONTROLLER GOES HERE
- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- */
+// Use path calculated by setNewPosition to move joint to specified position
+void Motor::positionAlgorithm() {
+  float newSpeed = 0;
   
- 
-  return currSpeed;
+  // Is is close enough to start slowing down?
+  if (abs(this->cmdPos - this->currPos) > this->delta_pos_SafeStop) {
+    // Apply acceleration
+    newSpeed = this->currSpeed + this->accel*this->dir_travel;
+    // Cap speed at MAX speed
+    if (abs(newSpeed) > this->cmdSpeed) {newSpeed = this->cmdSpeed*this->dir_travel;}
+    
+    // If in the overshot edge case but initial velocity is opposite to travel direction, direction needs to be flipped once motor 
+    // returns to initial position so it begins deccelerating
+    if (this->overshooting && this->started_opposite && dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
+      this->dir_travel = -this->dir_travel;
+    }
+  // Is this the overshot edge case? Are we overshooting? Are we still going the wrong way?
+  } else if (this->overshooting && abs(this->cmdPos - this->currPos) <= this->delta_pos_SafeStop && this->currSpeed/abs(this->currSpeed) != this->dir_travel) {
+    newSpeed = this->currSpeed + this->accel * this->dir_travel;
+
+  // Slowing down
+  } else {
+    // Apply acceleration in reverse
+    newSpeed = this->currSpeed - this->accel*this->dir_travel;
+    // Keep motor from overshooting and reversing direction
+    if (newSpeed*this->dir_travel < 0) {newSpeed = 0;}
+    this->overshooting = false; // Otherwise, motor will keep trying to correct and begin oscilating
+  }
+
+  this->sendMotorSpeed(newSpeed);
 }
 
 //Home motor joint by moving at a slow speed.
@@ -218,6 +279,8 @@ void Motor::reset() {
   this->currPos = 0;
   this->cmdPos = 0;
   this->currSpeed = 0;
+  this->cmdSpeed = 0;
+  this->sendMotorSpeed(0);
   this->exitSafeStart();
 }
 
@@ -229,18 +292,11 @@ void Motor::print() {
   Serial.print(this->currSpeed);
   Serial.print(",");
   Serial.println(this->cmdSpeed);
-  /*
-  Serial.print(",");
-  Serial.print(this->dir_speed);
-  Serial.print(",");
-  Serial.println(this->dir_accel);
-  */
 }
 
 //Getter funcs for private vars
 float Motor::getCurrPos() {return currPos;}
 float Motor::getCmdPos() {return cmdPos;}
-float Motor::getMoveThreshold() {return MOVE_THRESHOLD;}
 float Motor::getMinPos() {return MIN_POS;}
 float Motor::getMaxPos() {return MAX_POS;}
 
