@@ -25,7 +25,9 @@ class Motor {
 
     // MISC FUNCTIONS
     void print(); // Print state to the serial moniter
-    void reset(); // Reset I2C communication with driver
+    void reset(float pos); // Stops motor, clears error state, resets I2C communication line, clears all state variables, and set new current position
+    void reset(); // Reset motor and set new position to zero
+    void stop(int errorCode); // Stops the motor and raises error flag (requires reset to remove)
 
     //Getter functions for private vars.
     float getCurrPos();
@@ -42,32 +44,34 @@ class Motor {
     int FORWARD = 1;
     int REVERSE = -1;
     
-    // SPECIFIC MOTOR CONSTANTS
+    // UNCHANGABLE MOTOR CONSTANTS
     double PULSE_PER_REV;  // Encoder pulses per motor shaft revolution
     double GEAR_RATIO;     // Gear ratio of gearbox
     uint8_t I2C_NUM;       // I2C Device # of motor controller
     float MIN_POS;         // Mininum safe position
     float MAX_POS;         // Maxinum safe position
 
-    // MOTOR VARIABLES
-    float currSpeed;      // Speed being sent to motor controller
+    // CHANGABLE MOTOR CONSTANTS
+    float accel;          // Maximum change in speed per clock cycle
     float cmdSpeed;       // Max speed commanded by user
     
-    float accel;          // Maximum change in speed per clock cycle
-    
+    // STATE VARIABLES
+    float currSpeed;      // Speed being sent to motor controller
+    float currPos;        // Current position of the motor
+    float cmdPos;         // Position commanded by user
+
+    // ENCODER VARIABLES
     float encoderSpeed;   // Actual speed of motor
     float encoderAccel;   // Actual accel of motor
     
-    float currPos;        // Current position of the motor
-    float cmdPos;         // Position commanded by user
-    
+    // POSITION ALGORITHM VARIABLES
     int dir_travel;          // Which way is motor trying to go? (Which way is accelerate applied?)
     int dir_initialSpeed;    // Which way was the motor going when path was calculated?
-
     float delta_pos_SafeStop;  // Distance required to safely stop at desired position (used in path calculation)
     float initialPos;          // inital motor position when path was calculated
 
     // FLAG VARIABLES
+    bool error;             // Is motor in an error state and unsafe to run?
     bool overshooting;      // Is the initial speed to large to reach desired position without overshooting?
     bool started_opposite;  // Is the initial speed direction opposite to the travel direction from initial to desired positions
 };

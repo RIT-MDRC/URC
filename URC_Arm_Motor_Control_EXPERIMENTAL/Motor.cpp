@@ -14,17 +14,18 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
      this->cmdSpeed = defaultSpeed;
      this->accel = defaultAccel;     
     
-    // Initialize state variables to zero
+    // Initialize state and position algorithm variables to zero
+     this->currPos = 0;
+     this->cmdPos = 0;
      this->currSpeed = 0;
      this->encoderSpeed = 0;
      this->encoderAccel = 0;
-     this->currPos = 0;
-     this->cmdPos = 0;
      this->initialPos = 0;
      this->dir_travel = FORWARD;
      this->dir_initialSpeed = FORWARD;
 
      // Initialize flag variables to false
+     this->error = false;
      this->overshooting = false;
      this->started_opposite = false;
 }
@@ -37,7 +38,7 @@ void Motor::exitSafeStart() {
   Wire.endTransmission();
 
   // Output message to serial port to confirm command sent
-  Serial.print("Driver ");
+  Serial.print("I2C Driver ");
   Serial.print(this->I2C_NUM);
   Serial.println(" exited safe start");
 }
@@ -46,13 +47,16 @@ void Motor::exitSafeStart() {
 // INPUT: Directional motor speed [between 0 and 3200]
 void Motor::sendMotorSpeed(int16_t speed) {
   uint8_t cmd = 0x85; // Hexidecimnal code for sending FORWARD speed
-  
-  // If speed is negative, get absolute value and change I2C command to REVERSE
-  if (speed < 0)  {
-    cmd = 0x86;  // Hexidecimnal code for sending REVERSE speed
-    speed = (int16_t) abs(speed);
-  }
 
+  // If it is unsafe to move motor, speed is set to zero
+  if (!this->error) {
+    // If speed is negative, get absolute value and change I2C command to REVERSE
+    if (speed < 0)  {
+      cmd = 0x86;  // Hexidecimnal code for sending REVERSE speed
+      speed = (int16_t) abs(speed);
+    }
+  } else {speed = 0;}
+  
   // Send the command (speed must be broken into 2 pcs to fit inside write function)
   Wire.beginTransmission(this->I2C_NUM);
   Wire.write(cmd);
@@ -194,6 +198,9 @@ void Motor::driveMotor(float newPercent) {
   float percent_speed = 0;
   float moveThreshold = this->getMaxPos() * 0.1;
 
+  // Check if motor is within bounds and raise warning if
+  if (this->getCurrPos() > this->getMaxPos() || this->getCurrPos() < this->getMinPos()) {this->stop(1);}
+
   //Calculate the difference between the current position and the endstop threshold which the arm would be moving towards
   if(newPercent > 0){
     deltaPos = this->getMaxPos() - moveThreshold - this->getCurrPos(); //neg if within threshold, otherwise positive distance
@@ -224,40 +231,45 @@ void Motor::driveMotor(float newPercent) {
   Serial.println(maxPercent);
   
   //Convert percent to actual speed and send 
-  this->currSpeed = percent_speed / 100 * this->cmdSpeed;
-  this->sendMotorSpeed(currSpeed);
+  if (!this->error) {
+    this->currSpeed = percent_speed / 100 * this->cmdSpeed;
+    this->sendMotorSpeed(currSpeed);
+  }
 }
 
 // Use path calculated by setNewPosition to move joint to specified position
 void Motor::positionAlgorithm() {
   float newSpeed = 0;
-  
-  // Is is close enough to start slowing down?
-  if (abs(this->cmdPos - this->currPos) > this->delta_pos_SafeStop) {
-    // Apply acceleration
-    newSpeed = this->currSpeed + this->accel*this->dir_travel;
-    // Cap speed at MAX speed
-    if (abs(newSpeed) > this->cmdSpeed) {newSpeed = this->cmdSpeed*this->dir_travel;}
+
+  // Only run algorithm if not in an error state;
+  if (!this->error) {
+    // Is is close enough to start slowing down?
+    if (abs(this->cmdPos - this->currPos) > this->delta_pos_SafeStop) {
+      // Apply acceleration
+      newSpeed = this->currSpeed + this->accel*this->dir_travel;
+      // Cap speed at MAX speed
+      if (abs(newSpeed) > this->cmdSpeed) {newSpeed = this->cmdSpeed*this->dir_travel;}
     
-    // If in the overshot edge case but initial velocity is opposite to travel direction, direction needs to be flipped once motor 
-    // returns to initial position so it begins deccelerating
-    if (this->overshooting && this->started_opposite && dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
-      this->dir_travel = -this->dir_travel;
+      // If in the overshot edge case but initial velocity is opposite to travel direction, direction needs to be flipped once motor 
+      // returns to initial position so it begins deccelerating
+      if (this->overshooting && this->started_opposite && dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
+        this->dir_travel = -this->dir_travel;
+      }
+    // Is this the overshot edge case? Are we overshooting? Are we still going the wrong way?
+    } else if (this->overshooting && abs(this->cmdPos - this->currPos) <= this->delta_pos_SafeStop && this->currSpeed/abs(this->currSpeed) != this->dir_travel) {
+      newSpeed = this->currSpeed + this->accel * this->dir_travel;
+
+    // Slowing down
+    } else {
+      // Apply acceleration in reverse
+      newSpeed = this->currSpeed - this->accel*this->dir_travel;
+      // Keep motor from overshooting and reversing direction
+      if (newSpeed*this->dir_travel < 0) {newSpeed = 0;}
+      this->overshooting = false; // Otherwise, motor will keep trying to correct and begin oscilating
     }
-  // Is this the overshot edge case? Are we overshooting? Are we still going the wrong way?
-  } else if (this->overshooting && abs(this->cmdPos - this->currPos) <= this->delta_pos_SafeStop && this->currSpeed/abs(this->currSpeed) != this->dir_travel) {
-    newSpeed = this->currSpeed + this->accel * this->dir_travel;
 
-  // Slowing down
-  } else {
-    // Apply acceleration in reverse
-    newSpeed = this->currSpeed - this->accel*this->dir_travel;
-    // Keep motor from overshooting and reversing direction
-    if (newSpeed*this->dir_travel < 0) {newSpeed = 0;}
-    this->overshooting = false; // Otherwise, motor will keep trying to correct and begin oscilating
+    this->sendMotorSpeed(newSpeed);
   }
-
-  this->sendMotorSpeed(newSpeed);
 }
 
 //Home motor joint by moving at a slow speed.
@@ -275,13 +287,48 @@ void Motor::homing(int16_t dir)  {
   }
 }
 
-void Motor::reset() {
-  this->currPos = 0;
+// Stops motor, clears error state, resets I2C communication line, clears all state variables, and set new current position
+// INPUT: New current position
+void Motor::reset(float pos) {
+  // Stop motor
+  this->sendMotorSpeed(0);
+  
+  // Set new current position after checking if new position is within bounds
+  if (pos > this->MAX_POS) {this->currPos = this->MAX_POS;}
+  else if (pos < this->MIN_POS) {this->currPos = this->MIN_POS;}
+  else {this->currPos = pos;}
+  
+  // Clear all state variables
   this->cmdPos = 0;
   this->currSpeed = 0;
-  this->cmdSpeed = 0;
-  this->sendMotorSpeed(0);
+
+  // Reset I2C
   this->exitSafeStart();
+
+  // Clear error state
+  this->error = false;
+}
+void Motor::reset() {this->reset(0);}
+
+// Stops motor and displays error message to serial terminal
+// INPUT: error code
+void Motor::stop(int errorCode) {
+  this->error = true;
+  this->currSpeed = 0;
+  this->sendMotorSpeed(0);
+
+  Serial.print(" !!! WARNING: Motor has been stopped because ");
+  switch (errorCode) {
+    case 0:
+      Serial.println("user told it to stop ");
+      break;
+    case 1:
+      Serial.println("MIN or MAX position was exceeded !!!");
+      break;
+    default:
+      Serial.println("of unknown error !!!");
+      break;
+  }
 }
 
 void Motor::print() {

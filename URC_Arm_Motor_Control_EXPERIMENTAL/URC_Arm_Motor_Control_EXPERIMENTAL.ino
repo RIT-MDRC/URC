@@ -60,7 +60,7 @@ void setup() {
 
   // Initialize linear actuator potentiometer feedback
   pinMode(potPin,INPUT);  // Input pin for pot
-  joints[2].setNewPosition(analogRead(potPin));
+  joints[2].reset(analogRead(potPin));
 
   pinMode(resetPin,INPUT);
   
@@ -130,7 +130,7 @@ void loop() {
             enc_J2.write(0);
             break;
           case 2:
-            joints[n].setNewPosition(analogRead(potPin));
+            joints[n].reset(analogRead(potPin));
             break;
         }
         Serial.print("RESET ");
