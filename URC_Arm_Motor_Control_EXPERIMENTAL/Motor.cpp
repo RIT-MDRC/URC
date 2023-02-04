@@ -21,6 +21,7 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
      this->encoderSpeed = 0;
      this->encoderAccel = 0;
      this->initialPos = 0;
+     this->delta_pos_SafeStop = this->MAX_POS;
      this->dir_travel = FORWARD;
      this->dir_initialSpeed = FORWARD;
 
@@ -133,7 +134,7 @@ void Motor::setNewPosition(float newPos_degrees) {
   if (this->currSpeed == 0 && this->cmdPos == this->initialPos) {
     // Initial pos = final pos and initial velocity = 0
     this->delta_pos_SafeStop = 0;
-    Serial.println(" !!! EDGE CASE: Motor is already in position and sitting still !!!");
+    //Serial.println(" !!! EDGE CASE: Motor is already in position and sitting still !!!");
   
   // Will motor overshoot position because the initial velocity is too high?
   // Only edge case if initial velocity is in travel direction
@@ -149,14 +150,24 @@ void Motor::setNewPosition(float newPos_degrees) {
     }
     // Set OVERSHOOTING flag so stopping distance is only detected coming back
     this->overshooting = true;
-    Serial.println(" !!! EDGE CASE : Initial velocity is too high, Calculating correction for overshot !!!");
+    //Serial.println(" !!! EDGE CASE : Initial velocity is too high, Calculating correction for overshot !!!");
   
   // Does motor has enough distance to travel to speed up to and down from maximum speed
   } else if (delta_pos_Total < delta_pos_MaxVel) {
     // Stopping distance from max possible speed will be used
     this->delta_pos_SafeStop = delta_pos_Deccel;
-    Serial.println("!!! EDGE CASE : Cannot reach max speed, Calculating new speed limit !!!");
+    //Serial.println("!!! EDGE CASE : Cannot reach max speed, Calculating new speed limit !!!");
   }
+
+  Serial.print(delta_pos_Total);
+  Serial.print(", ");
+  Serial.print(delta_pos_MaxVel);
+  Serial.print(", ");
+  Serial.print(delta_pos_MaxDeccel);
+  Serial.print(", ");
+  Serial.print(delta_pos_Deccel);
+  Serial.print(", ");
+  Serial.println(delta_pos_InstantDeccel);
 }
 
 // Set the new maximum allowable speed for the motor
@@ -179,7 +190,7 @@ void Motor::interpretEncoder(float newPos) {
    this->encoderAccel = this->encoderSpeed - last_encoderSpeed;
   // Update postion variable
    this->currPos = newPos;
-
+  
   /*
   // Check if change in postion is opposite of desired direction
   if ((encoderSpeed < 0 && dir_speed == FORWARD) || (encoderSpeed > 0 && dir_speed == REVERSE)) {
@@ -238,7 +249,7 @@ void Motor::driveMotor(float newPercent) {
 }
 
 // Use path calculated by setNewPosition to move joint to specified position
-void Motor::positionAlgorithm() {
+float Motor::positionAlgorithm() {
   float newSpeed = 0;
 
   // Only run algorithm if not in an error state;
@@ -252,7 +263,7 @@ void Motor::positionAlgorithm() {
     
       // If in the overshot edge case but initial velocity is opposite to travel direction, direction needs to be flipped once motor 
       // returns to initial position so it begins deccelerating
-      if (this->overshooting && this->started_opposite && dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
+      if (this->overshooting && this->started_opposite && this->dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
         this->dir_travel = -this->dir_travel;
       }
     // Is this the overshot edge case? Are we overshooting? Are we still going the wrong way?
@@ -268,8 +279,11 @@ void Motor::positionAlgorithm() {
       this->overshooting = false; // Otherwise, motor will keep trying to correct and begin oscilating
     }
 
-    this->sendMotorSpeed(newSpeed);
+    this->currSpeed = newSpeed;
+    return newSpeed;
   }
+  this->currSpeed = 0;
+  return 0;
 }
 
 //Home motor joint by moving at a slow speed.
@@ -307,6 +321,10 @@ void Motor::reset(float pos) {
 
   // Clear error state
   this->error = false;
+
+  // Let user know
+  Serial.print("RESET Device ");
+  Serial.println(this->I2C_NUM);
 }
 void Motor::reset() {this->reset(0);}
 
@@ -332,12 +350,15 @@ void Motor::stop(int errorCode) {
 }
 
 void Motor::print() {
+  Serial.print(" ERROR = ");
+  Serial.print(this->error);
+  Serial.print(" currPos = ");
   Serial.print(this->currPos);
-  Serial.print(",");
+  Serial.print(",cmdPos = ");
   Serial.print(this->cmdPos);
-  Serial.print(",");
+  Serial.print(",currSpeed = ");
   Serial.print(this->currSpeed);
-  Serial.print(",");
+  Serial.print(",cmdSpeed = ");
   Serial.println(this->cmdSpeed);
 }
 
@@ -349,5 +370,5 @@ float Motor::getMaxPos() {return MAX_POS;}
 
 //Calculate encoder Count from degrees
 float Motor::degToPulse(float deg)  {
-  return deg / 360 * this->PULSE_PER_REV * this->GEAR_RATIO;
+  return deg / (float)360 * this->PULSE_PER_REV * this->GEAR_RATIO;
 }

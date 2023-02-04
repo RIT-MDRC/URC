@@ -13,7 +13,7 @@ class Motor {
     void sendMotorSpeed(int16_t speed);  // Send cmdSpeed to controller
     uint16_t readUpTime();
     
-    void positionAlgorithm();          // Use path calculated by setNewPosition to move joint to specified position
+    float positionAlgorithm();         // Use path calculated by setNewPosition to move joint to specified position
     void driveMotor(float newPercent); // Manually drive motor by specifying percentage of maximum speed (will limit speed when approaching min/max positions)
 
     // POSITION CONTROL
@@ -38,11 +38,11 @@ class Motor {
     
   private:    
     //GLOBAL MOTOR CONSTANTS
-    float ABS_MAX_SPEED = 3200;  // Maximum drivable speed
-    float ABS_MIN_SPEED = 120;   // Minimum drivable speed
+    const float ABS_MAX_SPEED = 3200;  // Maximum drivable speed
+    const float ABS_MIN_SPEED = 120;   // Minimum drivable speed
     // Const for making direction control more readable
-    int FORWARD = 1;
-    int REVERSE = -1;
+    const int FORWARD = 1;
+    const int REVERSE = -1;
     
     // UNCHANGABLE MOTOR CONSTANTS
     double PULSE_PER_REV;  // Encoder pulses per motor shaft revolution
@@ -65,8 +65,8 @@ class Motor {
     float encoderAccel;   // Actual accel of motor
     
     // POSITION ALGORITHM VARIABLES
-    int dir_travel;          // Which way is motor trying to go? (Which way is accelerate applied?)
-    int dir_initialSpeed;    // Which way was the motor going when path was calculated?
+    int dir_travel;            // Which way is motor trying to go? (Which way is accelerate applied?)
+    int dir_initialSpeed;      // Which way was the motor going when path was calculated?
     float delta_pos_SafeStop;  // Distance required to safely stop at desired position (used in path calculation)
     float initialPos;          // inital motor position when path was calculated
 

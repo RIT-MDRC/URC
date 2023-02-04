@@ -1,5 +1,5 @@
 /*  Position control of a motor with a quadrature encoder
- *  MICROCONTROLLER: Teensy 4.1
+ *  MICROCONTROLLER: Teensy 4.1 - https://www.pjrc.com/store/teensy41.html
  *  MOTOR CONTROLLER: Pololu SMC G2 18v25
  */
 #include "Motor.h"
@@ -19,9 +19,13 @@ const int resetPin = 23;
 
 const uint8_t NUM_JOINTS = 3;
 
+//I2C PINS - Just for reference
+//const int SCL = 19;
+//const int SDA = 18;
+
 //ENCODER VARIABLES
-Encoder enc_J1(16,17);
-Encoder enc_J2(14,15);
+Encoder enc_J1( 9,10);
+Encoder enc_J2(11,12);
 
 //Gripper Servo Variables
 const int gripperPin = 33;
@@ -29,10 +33,10 @@ Servo Gripper;
 int gripperHome = 90;
 
 //MOTORS
-// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, movement threshold
-Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 60);  // RATIO = 75 : 30
-Motor J2(-10, 80, 1669.656, 30, 14, 2000, 100); //RATIO = 15 : 1
-Motor J3(670, 860, 360, 1, 15, 3200, 200);
+// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max
+Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 10);  // RATIO = 75 : 30
+Motor J2(-10, 80, 1669.656, 30, 14, 2000, 20); //RATIO = 15 : 1
+Motor J3(200, 580, 360, 1, 15, 3200, 200);
 
 Motor joints[NUM_JOINTS] = {J1, J2, J3};
 
@@ -133,9 +137,8 @@ void loop() {
             joints[n].reset(analogRead(potPin));
             break;
         }
-        Serial.print("RESET ");
-        Serial.println(n+1);
-        Serial.print(String(timer)+"\n");
+        //Serial.print("RESET ");
+        //Serial.println(n+1);
         break;
       case 'Q':
         // Print status of motor
@@ -169,7 +172,7 @@ void loop() {
   if (timer >= 20) {
 
     float newPos[NUM_JOINTS] = {enc_J1.read(), enc_J2.read(), (float)analogRead(potPin)};
-    
+
     // Read and interpret the encoder
     for (int n = 0; n < NUM_JOINTS; n++) {
       joints[n].interpretEncoder(newPos[n]);
@@ -179,7 +182,9 @@ void loop() {
     // Check if the Emergency Stop Button has been pressed
     if (digitalRead(resetPin) == 1) {
       //Serial.println("ENABLED");
-      for (int n = 0; n < NUM_JOINTS; n++) {joints[n].positionAlgorithm();}
+      for (int n = 0; n < NUM_JOINTS; n++) {
+        joints[n].sendMotorSpeed(joints[n].positionAlgorithm());
+      }
     } else {
       for (int n = 0; n < NUM_JOINTS; n++) {joints[n].sendMotorSpeed(0);}
       //Serial.println("DISABLED");
