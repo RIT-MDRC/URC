@@ -33,10 +33,10 @@ Servo Gripper;
 int gripperHome = 90;
 
 //MOTORS
-// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max
-Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 10);  // RATIO = 75 : 30
-Motor J2(-10, 80, 1669.656, 30, 14, 2000, 20); //RATIO = 15 : 1
-Motor J3(200, 580, 360, 1, 15, 3200, 200);
+// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, reverse motor direction?
+Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 10, false);  // RATIO = 75 : 30
+Motor J2(-10, 80, 1669.656, 30, 14, 2000, 20, false); //RATIO = 15 : 1
+Motor J3(200, 580, 360, 1, 15, 3200, 200, true);
 
 Motor joints[NUM_JOINTS] = {J1, J2, J3};
 

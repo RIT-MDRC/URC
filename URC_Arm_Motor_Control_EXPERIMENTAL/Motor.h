@@ -6,7 +6,7 @@
 class Motor {
   public:
     // CONTRUCTION
-    Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deciveNum, float defaultSpeed, float defaultAccel);
+    Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deciveNum, float defaultSpeed, float defaultAccel, bool reversed);
     
     // I2C COMMUNICATION
     void exitSafeStart();  // Initialize controller
@@ -72,6 +72,7 @@ class Motor {
 
     // FLAG VARIABLES
     bool error;             // Is motor in an error state and unsafe to run?
+    bool reversedMotion;    // Is the hardware making the motor go the wrong way? (Can fix hardware instead)
     bool overshooting;      // Is the initial speed to large to reach desired position without overshooting?
     bool started_opposite;  // Is the initial speed direction opposite to the travel direction from initial to desired positions
 };

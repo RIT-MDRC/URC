@@ -1,6 +1,6 @@
 #include "Motor.h"
 
-Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel) {
+Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double ratio, uint8_t deviceNum, float defaultSpeed, float defaultAccel, bool reversed) {
     // MOTOR CONSTANTS
      this->PULSE_PER_REV = pulses;
      this->GEAR_RATIO = ratio;
@@ -27,6 +27,7 @@ Motor::Motor(float minPos_degrees, float maxPos_degrees, double pulses, double r
 
      // Initialize flag variables to false
      this->error = false;
+     this->reversedMotion = reversed;
      this->overshooting = false;
      this->started_opposite = false;
 }
@@ -57,6 +58,12 @@ void Motor::sendMotorSpeed(int16_t speed) {
       speed = (int16_t) abs(speed);
     }
   } else {speed = 0;}
+
+  // If needed, reverse the direction of the command
+  if (reversedMotion) {
+    if (cmd = 0x85) {cmd = 0x86;}
+    else {cmd = 0x85;}
+  }
   
   // Send the command (speed must be broken into 2 pcs to fit inside write function)
   Wire.beginTransmission(this->I2C_NUM);
