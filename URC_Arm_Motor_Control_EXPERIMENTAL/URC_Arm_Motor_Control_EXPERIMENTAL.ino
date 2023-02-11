@@ -33,7 +33,7 @@ Servo Gripper;
 int gripperHome = 90;
 
 //MOTORS
-// minPos, maxPos, pulses_per_rev (of output shaft), gear ratio, i2c device number, default max speed, acceleration max, reverse motor direction?
+// minPos, maxPos, pulses_per_rev (of output motor shaft), gear ratio, i2c device number, default max speed, acceleration max, reverse motor direction?
 Motor J1(-90, 90, 1482.6, 2.5, 13, 600, 10, false);  // RATIO = 75 : 30
 Motor J2(-10, 80, 1669.656, 30, 14, 2000, 20, false); //RATIO = 15 : 1
 Motor J3(200, 580, 360, 1, 15, 3200, 200, true);
@@ -102,6 +102,10 @@ void loop() {
     // Read command identifier
     char cmd = (char) Serial.read();
     int n = Serial.parseInt() - 1;
+
+    // Convert lower-case letters to upper-case by manupulating ASCII value of char
+    // Capital letters always have ASCII value 32 lower than lower-case letters
+    if (cmd > 90) {cmd -= 32;}
     
     switch (cmd) {
       case 'P':

@@ -89,7 +89,6 @@ elseif (delta_pos_Total < delta_pos_InstantDeccel)
     % Set OVERSHOOTING flag so stopping distance is only detected coming back
     OVERSHOOTING = true;
     disp(" !!! EDGE CASE : Initial velocity is too high, Calculating correction for overshot !!!" + newline)
-
 % Does motor has enough distance to travel to speed up to and down from maximum speed
 elseif (delta_pos_Total < delta_pos_MaxVel)
     % Stopping distance from max possible speed will be used
@@ -156,6 +155,7 @@ end
 % Calculate error between target and algorithm result
 error = pos_Final - pos(n+1);
 disp("DISTANCE FROM END POSITION TO TARGET: " + string(error));
+disp(delta_pos_SafeStop);
 
 % Create a line to represent target position
 target = pos_Final * ones(n+1,1);

@@ -50,6 +50,8 @@ void Motor::exitSafeStart() {
 void Motor::sendMotorSpeed(int16_t speed) {
   uint8_t cmd = 0x85; // Hexidecimnal code for sending FORWARD speed
 
+  if (reversedMotion) {speed *= -1;}
+  
   // If it is unsafe to move motor, speed is set to zero
   if (!this->error) {
     // If speed is negative, get absolute value and change I2C command to REVERSE
@@ -59,12 +61,6 @@ void Motor::sendMotorSpeed(int16_t speed) {
     }
   } else {speed = 0;}
 
-  // If needed, reverse the direction of the command
-  if (reversedMotion) {
-    if (cmd = 0x85) {cmd = 0x86;}
-    else {cmd = 0x85;}
-  }
-  
   // Send the command (speed must be broken into 2 pcs to fit inside write function)
   Wire.beginTransmission(this->I2C_NUM);
   Wire.write(cmd);
