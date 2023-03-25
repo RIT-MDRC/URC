@@ -1,0 +1,462 @@
+#include "Actuator.h"
+
+// CONSTRUCTOR
+Actuator::Actuator(uint8_t device_num, ActuatorType type, float minPos_degrees, float maxPos_degrees, float max_speed, float acc, double units_per_rev, double gear_ratio, bool reversed) {
+  // Initialize unchangable constants
+  this->I2C_NUM = device_num;
+  this->ACTUATOR_TYPE = type;
+  this->UNITS_PER_REV = units_per_rev;
+  this->GEAR_RATIO = gear_ratio;
+  this->MIN_POS = degToUnit(minPos_degrees);
+  this->MAX_POS = degToUnit(maxPos_degrees);
+
+  // Initialize motion limits
+  this->sendSafeMaxSpeed(max_speed);
+  this->accel = acc;
+
+  // Initialize flag variables
+  this->error = ErrorCode::NO_ERROR;
+  this->reversedMotion = reversed;
+  
+  // Initialize state and position algorithm variables to zero
+  this->currPos = 0;
+  this->cmdPos = 0;
+  this->currSpeed = 0;
+  this->encoderSpeed = 0;
+  this->encoderAccel = 0;
+  this->initialPos = 0;
+  this->delta_pos_SafeStop = this->MAX_POS;
+  this->dir_travel = (int)Direction::FORWARD;
+  this->dir_initialSpeed = (int)Direction::FORWARD;
+  this->overshooting = false;
+  this->started_opposite = false;
+
+  // If using actuator, set error state so that joint doesn't move until position calibrated
+  if (type == ActuatorType::LINEAR) {this->error = ErrorCode::POS_UNCERTAIN;}
+}
+
+// COMMON ERROR HANDLING -----------------------------------------------------------------------------------------
+
+// Must be called after start-up or reboot to let driver know it is safe to start moving
+void Actuator::exitSafeStart() {
+  // Clear the error state unless the joint has lost its position
+  if (this->error == ErrorCode::POS_UNCERTAIN) {return;}
+  else {this->error = ErrorCode::NO_ERROR;}
+  
+  // Send command to driver
+  this->commandQuick(I2CCommand::ExitSafeStart);
+
+  // Tell user which driver the command was sent to
+  Serial.print(" Driver ");
+  Serial.print(this->I2C_NUM);
+  Serial.println(" exited safe start");
+}
+
+// Must be called at least once per second to let driver know that everything is still okay
+// If command timeout error occurs, an exitSafeStart command must be sent to reset driver
+void Actuator::resetCommandTimeout() {
+  if (this->ACTUATOR_TYPE == ActuatorType::MOTOR || this->ACTUATOR_TYPE == ActuatorType::LINEAR) {return;}
+  commandQuick(I2CCommand::ResetCommandTimeout);
+}
+
+// COMMON MOTION CONTROL -----------------------------------------------------------------------------------------
+
+// Tells driver directly what speed to drive
+// INPUT: -100 to 100 % of max safe speed
+void Actuator::sendTargetSpeed(double percent) {
+  // Exit function if joint is in an error state
+  if (this->error != ErrorCode::NO_ERROR) {return;}
+  
+  // Make sure desired percent is <= 100%
+  if (abs(percent) > 100) {percent = (double)100 * percent/abs(percent);}
+  
+  // Calculate new speed
+  double speed = (double)this->getSafeMaxSpeed() * percent / (double)100;
+  
+  // If joint is a motor/actuator, send absolute value of speed and set direction with different commands
+  if (ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {
+    // Send command to motor control in a format it will understand
+    this->sendMotorSpeed((float)speed);
+  }
+  
+  // If joint is a stepper, value can be negative and there is only one command
+  // NOTE: Driver will automatically enforce safe speed limit
+  else if (this->ACTUATOR_TYPE == ActuatorType::STEPPER) {
+    // Check if speed needs to be reversed due to hardware mix-up
+    if (reversedMotion) {speed *= -1;}
+    
+    // Send command after converting speed to steps per 10000 seconds
+    // NOTE: I have no idea why the driver uses steps per 10000 seconds. Thats just what the documentation says
+    commandW32(I2CCommand::SetTargetVelocity, (int32_t)speed*10000);
+  }
+
+  // Store new speed
+  this->currSpeed = (float)speed;
+}
+
+// Tells joint a new desired angular position
+// INPUT: If motor:    Convert to encoder pulse and calculate path with postion algorithm
+//        If actuator: Convert to linear position and calculate path with postion algorithm
+//        If stepper:  Convert to steps and send to stepper controller
+void Actuator::sendTargetPosition(float newPos_degrees) {
+  // Exit function if joint is in an error state
+  if (this->error != ErrorCode::NO_ERROR) {return;}
+  
+  // Convert desired position from degrees to joint native units
+  float newPos = this->degToUnit(newPos_degrees);
+
+  // Check if desired position is within safe limits
+  if (newPos <= this->MAX_POS && newPos >= this->MIN_POS) {
+    // If desired position is in the safe range, set command position to desired position
+    this->cmdPos = newPos;
+  } else if (newPos > this->MAX_POS) {
+    // If desired pos is above safe max, set command position to max position
+    this->cmdPos = this->MAX_POS;
+  } else if (newPos < this->MIN_POS) {
+    // If desired pos is below safe min, set command position to min position
+    this->cmdPos = this->MIN_POS;
+  }
+  
+  // If motor or actuator, joint will need to use position algorithm
+  if (this->ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {
+    this->calcPath(cmdPos);
+  } 
+  // If stepper, joint will be able to reach position on its own
+  else if (this->ACTUATOR_TYPE == ActuatorType::STEPPER) {
+    commandW32(I2CCommand::SetTargetPosition, (int32_t)newPos);
+  }
+
+  // If joint doesn't have encoder, store new position value
+  if (!this->hasEncoder) {this->currPos = newPos;}
+}
+
+// Tells joint a new desired max speed (NOTE: This is seperate from the ABSOLUTE maximum speed)
+void Actuator::sendSafeMaxSpeed(float newMax) {
+  // Make sure input value positive
+  newMax = abs(newMax);
+  // Make sure input value is within absolute limits of actuator type
+  if ((this->ACTUATOR_TYPE == ActuatorType::MOTOR || this->ACTUATOR_TYPE == ActuatorType::LINEAR) && newMax > Actuator::MOTOR_ABS_MAX_SPEED) {
+    newMax = Actuator::MOTOR_ABS_MAX_SPEED;
+  } else if (this->ACTUATOR_TYPE == ActuatorType::STEPPER && newMax > Actuator::STEPPER_ABS_MAX_SPEED) {
+    newMax = Actuator::STEPPER_ABS_MAX_SPEED;
+  }
+  
+  // If stepper, speed limit is enforced by the driver
+  if (this->ACTUATOR_TYPE == ActuatorType::STEPPER) {commandW32(I2CCommand::SetSpeedMax, this->safeMaxSpeed);}
+  // If motor/linear, speed limit is enforced by position algorithm
+
+  // Store new maximum speed
+  this->safeMaxSpeed = newMax;
+}
+
+// Determine velocity and accelerations [in native units per code loop] based on encoder readings
+// INPUT: new position reading of the encoder
+void Actuator::interpretEncoder(float newPos) {
+  // If joint has no encoder, exit function
+  if (!hasEncoder) {return;}
+  
+  // Before calculations, store speed from last loop
+  float last_encoderSpeed = this->encoderSpeed;
+  // Calculate new speed (change since last loop)
+  this->encoderSpeed = newPos - this->currPos;
+  this->encoderAccel = this->encoderSpeed - last_encoderSpeed;
+  // Store encoder reading
+  this->currPos = newPos;
+}
+
+// Tell joint to keep moving in one direction until it reaches limit switch (used to recalibrate position)
+void Actuator::goHome(int dir) {
+   // COMPLETE AFTER LIMIT SWITCHES ARE INSTALLED
+}
+
+// MOTOR SPECIFIC FUNCTIONS -------------------------------------------------------------------------------------
+
+// Determines which I2C command to send based on input speed
+// INPUT: desired speed [0 to 3200]
+void Actuator::sendMotorSpeed(double newSpeed) {
+  // Initialize motor to go forward
+  I2CCommand cmd = I2CCommand::MotorForward;
+
+  // Check if speed needs to be reversed due to hardware mix-up
+  if (reversedMotion) {newSpeed *= -1;}
+  
+  // If input value is negative, change command to reverse and make value positive
+  if (newSpeed < 0)  {
+    cmd = I2CCommand::MotorReverse;
+    newSpeed = abs(newSpeed);
+  }
+  
+  // Send the command
+  this->commandW12(cmd, (uint16_t)newSpeed);
+}
+
+// Calculate how to control speed to reach desired position using Newtons 2nd Law
+// INPUT: desired position (in native joint units)
+void Actuator::calcPath(float newPos) {
+  //NOTE: It is assumed that input has already been limited to safe range
+
+  this->cmdPos = newPos;
+  
+  // Capture the current position of the motor;
+  this->initialPos = this->currPos;
+
+  // Determine direction from initial to final pos (defaults to initial vel direction when final pos is same as initial pos)
+  this->dir_travel = this->dir_initialSpeed;
+  if (this->cmdPos != this->initialPos) {
+    this->dir_travel = (this->cmdPos - this->initialPos) / abs(this->cmdPos - this->initialPos);
+  }
+  
+  // Change in position required for motor to accelerate to and decelerate from max velocity
+  float delta_pos_MaxVel = ( 2*pow(this->safeMaxSpeed,2) - pow(this->encoderSpeed,2) ) / (2*this->accel);
+
+  // Change in position required to deccelerate from max velocity (with correction factor)
+  float delta_pos_MaxDeccel = pow(this->safeMaxSpeed,2) / (2*this->accel);
+
+  // Total distance from initial and final positions
+  float delta_pos_Total = abs(this->cmdPos - this->initialPos);
+
+  // Total distance required to stop if max speed not limited
+  float delta_pos_Deccel = (delta_pos_Total + pow(this->currSpeed,2)/(2*this->accel) ) / 2;
+
+  // Total distance required to stop from initial speed
+  float delta_pos_InstantDeccel = pow(this->currSpeed,2) / (2*this->accel);
+
+  // Default to max speed and no overshot
+  this->delta_pos_SafeStop = delta_pos_MaxDeccel;
+  this->overshooting = false;
+
+  // Is motor already in final position and sitting still?
+  if (this->currSpeed == 0 && this->cmdPos == this->initialPos) {
+    // Initial pos = final pos and initial velocity = 0
+    this->delta_pos_SafeStop = 0;
+    //Serial.println(" !!! EDGE CASE: Motor is already in position and sitting still !!!");
+  
+  // Will motor overshoot position because the initial velocity is too high?
+  // Only edge case if initial velocity is in travel direction
+  } else if (delta_pos_Total < delta_pos_InstantDeccel) {
+    // Stopping distance will be half of overshot distance
+    this->delta_pos_SafeStop = (delta_pos_InstantDeccel - delta_pos_Total) / 2;
+    // Invert direction so motor immediately deccelerates
+    // If initial vel is opposite to travel direction, direction will be inverted once motor has returned to initial position (i.e. inside loop)
+    this->started_opposite = true;
+    if (this->dir_initialSpeed == this->dir_travel) {
+        this->dir_travel = -1 * this->dir_travel;
+        this->started_opposite = false;
+    }
+    // Set OVERSHOOTING flag so stopping distance is only detected coming back
+    this->overshooting = true;
+    //Serial.println(" !!! EDGE CASE : Initial velocity is too high, Calculating correction for overshot !!!");
+  
+  // Does motor has enough distance to travel to speed up to and down from maximum speed
+  } else if (delta_pos_Total < delta_pos_MaxVel) {
+    // Stopping distance from max possible speed will be used
+    this->delta_pos_SafeStop = delta_pos_Deccel;
+    //Serial.println("!!! EDGE CASE : Cannot reach max speed, Calculating new speed limit !!!");
+  }
+}
+
+// Use calculated path to move joint to specified position
+// OUTPUT: Speed to send to joint
+void Actuator::positionAlgorithm() {
+  // Only run algorithm for motors/actuators and if not in an error state;
+  if (!(this->ACTUATOR_TYPE == ActuatorType::MOTOR || this->ACTUATOR_TYPE == ActuatorType::LINEAR)) {return;} 
+  if (this->error != ErrorCode::NO_ERROR) {return;}
+
+  // Initialize output to zero
+  float newSpeed = 0;
+
+  // If joint is close to desired position, stop it
+  if (abs(this->currPos - this->cmdPos) <= this->degToUnit(1) && !this->overshooting) {
+    this->currSpeed = newSpeed;
+    this->sendMotorSpeed(newSpeed);
+    return;
+  }
+
+  // Is is close enough to start slowing down?
+  if (abs(this->cmdPos - this->currPos) > this->delta_pos_SafeStop) {
+    // Apply acceleration
+    newSpeed = this->currSpeed + this->accel*this->dir_travel;
+    // Cap speed at MAX speed
+    if (abs(newSpeed) > this->safeMaxSpeed) {newSpeed = this->safeMaxSpeed*this->dir_travel;}
+  
+    // If in the overshot edge case but initial velocity is opposite to travel direction, direction needs to be flipped once motor 
+    // returns to initial position so it begins deccelerating
+    if (this->overshooting && this->started_opposite && this->dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
+      this->dir_travel = -this->dir_travel;
+    }
+  // Is this the overshot edge case? Are we overshooting? Are we still going the wrong way?
+  } else if (this->overshooting && abs(this->cmdPos - this->currPos) <= this->delta_pos_SafeStop && this->currSpeed/abs(this->currSpeed) != this->dir_travel) {
+    newSpeed = this->currSpeed + this->accel * this->dir_travel;
+
+  // Slowing down
+  } else {
+    // Apply acceleration in reverse
+    newSpeed = this->currSpeed - this->accel*this->dir_travel;
+    // Keep motor from overshooting and reversing direction
+    if (newSpeed*this->dir_travel < 0) {newSpeed = 0;}
+    this->overshooting = false; // Otherwise, motor will keep trying to correct and begin oscilating
+  }
+
+  // Send adjusted speed to joint controller
+  this->currSpeed = newSpeed;
+  this->sendMotorSpeed(newSpeed);
+}
+
+// LINEAR ACTUATOR SPECIFIC FUNCTIONS ----------------------------------------------------------------------------------
+
+// Recalibrates stored position value based on absolute encoder of encoder
+// INPUT: Encoder reading in native units of joint
+void Actuator::calibratePos(float pos) {
+  // If not an actuator, joint doesn't have an absolute encoder and shouldnt use this function
+  if (this->ACTUATOR_TYPE != ActuatorType::LINEAR) {return;}
+  
+  // Store current position of encoder
+  this->currPos = pos;
+  this->calcPath(pos);
+  // Clear uncertain position error state
+  this->error = ErrorCode::NO_ERROR;
+
+  this->exitSafeStart();
+}
+
+// MISC FUNCTIONS -----------------------------------------------------------------------------------------------
+
+// Prints out state variables and current error state onto Serial Terminal
+void Actuator::print() {
+  Serial.print(" currPos = ");
+  Serial.print(this->currPos);
+  Serial.print(", cmdPos = ");
+  Serial.print(this->cmdPos); // NOTE: If actuator has no encoder, currPos always equals cmdPos
+  Serial.print(", currSpeed = ");
+  Serial.print(this->currSpeed);  // NOTE: If actuator is stepper, currSpeed will equal safeMaxSpeed unless manually driving
+  Serial.print(", safeMaxSpeed = ");
+  Serial.println(this->safeMaxSpeed);
+  Actuator::printError(this->error);
+}
+
+void Actuator::printError(ErrorCode err) {
+  Serial.print(" ERROR: ");
+  switch (err) {
+    case ErrorCode::NO_ERROR:
+      Serial.println("No Error");
+      break;
+    case ErrorCode::USER_INTERUPTION:
+      Serial.println("User has interupted actuator motion (RESET to clear)");
+      break;
+    case ErrorCode::POS_LIMIT_REACHED:
+      Serial.println("Safe Position Limit has been exceeded (HOME to clear)");
+      break;
+    case ErrorCode::POS_UNCERTAIN:
+      Serial.println("Actuator Position is Uncertain (HOME to clear)");
+      break;
+    default:
+      Serial.println("Unknown Error");
+      break;
+  }
+}
+
+// Stops motor, clears error state, resets I2C communication line, clears all state variables, and set new current position
+// INPUT: Current encoder reading (in native units)
+void Actuator::reset(float pos) {
+  // Store current encoder reading and set it as desired position so actuator wont try to move
+  this->currPos = pos;
+  this->cmdPos = this->currPos;
+
+  // Set current speed to zero
+  this->currSpeed = 0;
+
+  // If actuator is stepper, use Halt and Set Position command
+  if (ACTUATOR_TYPE == ActuatorType::STEPPER) {this->commandW32(I2CCommand::HaltAndSetPosition, pos);}
+  
+  // If actuator is motor/linear, use brake command then recalibrate position algorithm to current position 
+  else if (ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {
+    this->commandW7(I2CCommand::MotorBrake, 16);
+    this->calcPath(this->currPos);
+  }
+  
+  // Give driver some time to execute command
+  delay(10);
+  
+  // Clear error state unless it is a position uncertain error (must HOME or RECALIBRATE to clear that error)
+  if (error !=ErrorCode::POS_UNCERTAIN) {
+    this->error = ErrorCode::NO_ERROR;
+    // Let driver know it is now safe to move again
+    this->exitSafeStart();
+  }
+  
+  // Print message to Serial Terminal to let user know which driver was reset
+  Serial.print("RESET Device ");
+  Serial.println(this->I2C_NUM);
+}
+// If no position given, set current position to zero
+void Actuator::reset() {this->reset(0);}
+
+// Stops the motor and raises error flag (requires reset to remove)
+void Actuator::stop(ErrorCode err)  {
+  // If stepper, use halt and hold command
+  if (ACTUATOR_TYPE == ActuatorType::STEPPER) {this->commandQuick(I2CCommand::HaltAndHold);}
+  
+  // If actuator is motor/linear, use brake command 
+  else if (ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {this->commandW7(I2CCommand::MotorBrake, 32);}
+
+  // Set error state and print message to Serial Terminal to let user know what went wrong
+  this->error = err;
+  Actuator::printError(err);
+}
+
+// Convert from degrees to native unit of joint (ex: steps or encoder pulses)
+float Actuator::degToUnit(float deg) {
+  return deg / (float)360 * this->UNITS_PER_REV * this->GEAR_RATIO;
+}
+
+// Convert from native unit of joint to degrees for better readability
+float Actuator::unitToDeg(float unit) { 
+  return unit / this->UNITS_PER_REV / this->GEAR_RATIO * (float)360;
+}
+
+// Tells actuator to ignore all encoder functions
+void Actuator::noEncoder() {this->hasEncoder = false;}    
+
+// GETTERS AND SETTER --------------------------------------------------------------------------------------------
+
+float Actuator::getCurrPos() {return currPos;}
+float Actuator::getCmdPos() {return cmdPos;}
+float Actuator::getMinPos() {return MIN_POS;}
+float Actuator::getMaxPos() {return MAX_POS;}
+float Actuator::getSafeMaxSpeed() {return safeMaxSpeed;}
+
+// I2C COMMAND FUNCTIONS ----------------------------------------------------------------------------------------
+// Sends an I2C command with a no parameter
+void Actuator::commandQuick(I2CCommand cmd) {
+  Wire.beginTransmission(this->I2C_NUM);
+  Wire.write((uint8_t)cmd);
+  _lastError = Wire.endTransmission();
+}
+
+// Sends an I2C command with a 32-bit parameter
+void Actuator::commandW32(I2CCommand cmd, uint32_t val) {
+  Wire.beginTransmission(this->I2C_NUM);
+  Wire.write((uint8_t)cmd);
+  Wire.write((uint8_t)(val >> 0)); // lowest byte
+  Wire.write((uint8_t)(val >> 8));
+  Wire.write((uint8_t)(val >> 16));
+  Wire.write((uint8_t)(val >> 24)); // highest byte
+  _lastError = Wire.endTransmission();
+}
+
+// Sends an I2C command with a 12-bit parameter
+void Actuator::commandW12(I2CCommand cmd, uint16_t val) {
+  Wire.beginTransmission(this->I2C_NUM);
+  Wire.write((uint16_t)cmd);
+  Wire.write(val & 0x1F);
+  Wire.write(val >> 5 & 0x7F);
+  _lastError = Wire.endTransmission();
+}
+
+// Sends an I2C command with a 7-bit parameter
+void Actuator::commandW7(I2CCommand cmd, uint8_t val) {
+  Wire.beginTransmission(this->I2C_NUM);
+  Wire.write((uint8_t)cmd);
+  Wire.write((uint8_t)(val & 0x7F));
+  _lastError = Wire.endTransmission();
+}

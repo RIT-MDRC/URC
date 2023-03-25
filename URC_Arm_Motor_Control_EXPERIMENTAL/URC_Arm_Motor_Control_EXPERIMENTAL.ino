@@ -88,88 +88,14 @@ void loop() {
   // Store current time in TIME variable to use next loop
   TIME = newTIME;
 // READING COMMAND FROM SERIAL ***********************************************************
-  /* Commands expected as:
-   *    DESIGNATOR_CHAR VALUE
-   * Valid DESIGNATOR CHARACTERS are P - Postion Set, S - Max Speed, R - Reset Drivers, Q - Print to Serial, M - Move, H - Homing
+  /* COMMAND FORMAT: Cn v
+   *    C - Command Identifier (char)
+   *    n - Joint Number (1,2,3,4,5,6)
+   *    v - Command Value (int)
+   * Valid Command Identifiers are P - Postion Set, S - Max Speed, R - Reset Drivers, Q - Print to Serial, M - Move, H - Homing
    */
-  
-  //Serial.print(String(Serial.available()) + "\n"); 
-  if (Serial.available()) {
-
-    float setSpeed = 0;
-    float setPos = 0; 
-
-    // Read command identifier
-    char cmd = (char) Serial.read();
-    int n = Serial.parseInt() - 1;
-
-    // Convert lower-case letters to upper-case by manupulating ASCII value of char
-    // Capital letters always have ASCII value 32 lower than lower-case letters
-    if (cmd > 90) {cmd -= 32;}
-    
-    switch (cmd) {
-      case 'P':
-        // Set new command position
-        setPos = Serial.parseFloat();
-        joints[n].setNewPosition(setPos);
-        
-        Serial.print("POSITION: ");
-        Serial.println(setPos);
-        break;
-      case 'S':
-        // Set new max speed
-        setSpeed = Serial.parseFloat();
-        if (joints[n].setMaxSpeed(setSpeed)) {        
-          /*
-          Serial.print("SPEED: ");
-          Serial.println(setSpeed);
-          */
-        }
-        break;
-      case 'R':
-        // Reset motor driver and set position and speed to zero
-        joints[n].reset();
-
-        switch (n) {
-          case 0:
-            enc_J1.write(0);
-            break;
-          case 1:
-            enc_J2.write(0);
-            break;
-          case 2:
-            joints[n].reset(analogRead(potPin));
-            break;
-        }
-        //Serial.print("RESET ");
-        //Serial.println(n+1);
-        break;
-      case 'Q':
-        // Print status of motor
-        Serial.print("JOINT ");
-        Serial.print(n+1);
-        Serial.print(": ");
-        joints[n].print();
-        //Serial.print(String(timer)+"\n");
-        break;
-      case 'D':
-        //Drive Motor speed directly
-        setSpeed = Serial.parseFloat();
-        joints[n].driveMotor(setSpeed);
-        break;
-      case 'H':
-        //Home Motor
-        setSpeed = Serial.parseFloat();
-        joints[n].homing(setSpeed);
-        break;
-      case 'G':
-        // Actuate Gripper
-        actuateGripper(n+1);
-        break;
-      default:
-        break;
-    }
-  }
+  // Check if command has been sent
+  if (Serial.available()) {parseCommand();}
   
 // ENCODER READING AND DECODING **********************************************************
   // If enough time has passed ...
@@ -184,7 +110,7 @@ void loop() {
 
 // POSITION ALGORITHM ********************************************************************
     // Check if the Emergency Stop Button has been pressed
-    if (digitalRead(resetPin) == 1) {
+    if (digitalRead(resetPin) == 0) {
       //Serial.println("ENABLED");
       for (int n = 0; n < NUM_JOINTS; n++) {
         joints[n].sendMotorSpeed(joints[n].positionAlgorithm());

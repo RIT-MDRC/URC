@@ -69,18 +69,6 @@ void Motor::sendMotorSpeed(int16_t speed) {
   Wire.endTransmission();
 }
 
-// Ask the driver how long motor has been active (time since exiting safe start)
-uint16_t Motor::readUpTime() {
-  Wire.beginTransmission(this->I2C_NUM);
-  Wire.write(0xA1);  // Command: Get variable
-  Wire.write(28);    // Variable ID: Up time (low)
-  Wire.endTransmission();
-  Wire.requestFrom(this->I2C_NUM, (uint8_t)2);
-  uint16_t upTime = Wire.read();
-  upTime |= Wire.read() << 8;
-  return upTime;
-}
-
 // Sets the new desired position of the motor after checking if within limits, then calculate path to reach it
 // INPUT: Desired position [in degrees]
 void Motor::setNewPosition(float newPos_degrees) {
@@ -316,7 +304,7 @@ void Motor::reset(float pos) {
   else {this->currPos = pos;}
   
   // Clear all state variables
-  this->cmdPos = 0;
+  this->cmdPos = this->currPos;
   this->currSpeed = 0;
 
   // Reset I2C

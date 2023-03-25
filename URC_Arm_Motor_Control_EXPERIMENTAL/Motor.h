@@ -43,6 +43,10 @@ class Motor {
     // Const for making direction control more readable
     const int FORWARD = 1;
     const int REVERSE = -1;
+
+    //ERROR CODES
+    const int USER_INTERUPTION = 0;     // User told motor to stop
+    const int POS_LIMIT_REACHED = 1; // Limits were reached but the motor kept going
     
     // UNCHANGABLE MOTOR CONSTANTS
     double PULSE_PER_REV;  // Encoder pulses per motor shaft revolution
