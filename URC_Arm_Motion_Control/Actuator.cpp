@@ -1,4 +1,4 @@
-#include "Actuator.h"
+#include "Actuator.h" 
 
 // CONSTRUCTOR
 Actuator::Actuator(uint8_t device_num, ActuatorType type, float minPos_degrees, float maxPos_degrees, float max_speed, float acc, double units_per_rev, double gear_ratio, bool reversed) {
@@ -24,13 +24,14 @@ Actuator::Actuator(uint8_t device_num, ActuatorType type, float minPos_degrees, 
   this->currSpeed = 0;
   this->encoderSpeed = 0;
   this->encoderAccel = 0;
-  this->initialPos = 0;
-  this->delta_pos_SafeStop = this->MAX_POS;
-  this->dir_travel = (int)Direction::FORWARD;
-  this->dir_initialSpeed = (int)Direction::FORWARD;
-  this->overshooting = false;
-  this->started_opposite = false;
 
+  // Intialize PID Position Algorithm parameters (Gains will be set by another function)
+  this->Kp = 1;
+  this->Ki = 0;
+  this->Kd = 0;
+  this->integral = 0;
+  this->lastError = 0;
+  
   // If using actuator, set error state so that joint doesn't move until position calibrated
   if (type == ActuatorType::LINEAR) {this->error = ErrorCode::POS_UNCERTAIN;}
 }
@@ -117,9 +118,9 @@ void Actuator::sendTargetPosition(float newPos_degrees) {
     this->cmdPos = this->MIN_POS;
   }
   
-  // If motor or actuator, joint will need to use position algorithm
+  // If motor or actuator, DO SOMETHING SPECIFIC
   if (this->ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {
-    this->calcPath(cmdPos);
+    // PUT MOTOR/LINEAR SPECIFIC CODE HERE
   } 
   // If stepper, joint will be able to reach position on its own
   else if (this->ACTUATOR_TYPE == ActuatorType::STEPPER) {
@@ -190,116 +191,34 @@ void Actuator::sendMotorSpeed(double newSpeed) {
   this->commandW12(cmd, (uint16_t)newSpeed);
 }
 
-// Calculate how to control speed to reach desired position using Newtons 2nd Law
-// INPUT: desired position (in native joint units)
-void Actuator::calcPath(float newPos) {
-  //NOTE: It is assumed that input has already been limited to safe range
-
-  this->cmdPos = newPos;
-  
-  // Capture the current position of the motor;
-  this->initialPos = this->currPos;
-
-  // Determine direction from initial to final pos (defaults to initial vel direction when final pos is same as initial pos)
-  this->dir_travel = this->dir_initialSpeed;
-  if (this->cmdPos != this->initialPos) {
-    this->dir_travel = (this->cmdPos - this->initialPos) / abs(this->cmdPos - this->initialPos);
-  }
-  
-  // Change in position required for motor to accelerate to and decelerate from max velocity
-  float delta_pos_MaxVel = ( 2*pow(this->safeMaxSpeed,2) - pow(this->encoderSpeed,2) ) / (2*this->accel);
-
-  // Change in position required to deccelerate from max velocity (with correction factor)
-  float delta_pos_MaxDeccel = pow(this->safeMaxSpeed,2) / (2*this->accel);
-
-  // Total distance from initial and final positions
-  float delta_pos_Total = abs(this->cmdPos - this->initialPos);
-
-  // Total distance required to stop if max speed not limited
-  float delta_pos_Deccel = (delta_pos_Total + pow(this->currSpeed,2)/(2*this->accel) ) / 2;
-
-  // Total distance required to stop from initial speed
-  float delta_pos_InstantDeccel = pow(this->currSpeed,2) / (2*this->accel);
-
-  // Default to max speed and no overshot
-  this->delta_pos_SafeStop = delta_pos_MaxDeccel;
-  this->overshooting = false;
-
-  // Is motor already in final position and sitting still?
-  if (this->currSpeed == 0 && this->cmdPos == this->initialPos) {
-    // Initial pos = final pos and initial velocity = 0
-    this->delta_pos_SafeStop = 0;
-    //Serial.println(" !!! EDGE CASE: Motor is already in position and sitting still !!!");
-  
-  // Will motor overshoot position because the initial velocity is too high?
-  // Only edge case if initial velocity is in travel direction
-  } else if (delta_pos_Total < delta_pos_InstantDeccel) {
-    // Stopping distance will be half of overshot distance
-    this->delta_pos_SafeStop = (delta_pos_InstantDeccel - delta_pos_Total) / 2;
-    // Invert direction so motor immediately deccelerates
-    // If initial vel is opposite to travel direction, direction will be inverted once motor has returned to initial position (i.e. inside loop)
-    this->started_opposite = true;
-    if (this->dir_initialSpeed == this->dir_travel) {
-        this->dir_travel = -1 * this->dir_travel;
-        this->started_opposite = false;
-    }
-    // Set OVERSHOOTING flag so stopping distance is only detected coming back
-    this->overshooting = true;
-    //Serial.println(" !!! EDGE CASE : Initial velocity is too high, Calculating correction for overshot !!!");
-  
-  // Does motor has enough distance to travel to speed up to and down from maximum speed
-  } else if (delta_pos_Total < delta_pos_MaxVel) {
-    // Stopping distance from max possible speed will be used
-    this->delta_pos_SafeStop = delta_pos_Deccel;
-    //Serial.println("!!! EDGE CASE : Cannot reach max speed, Calculating new speed limit !!!");
-  }
+// Set new gains for PID position algorithm
+// INPUT: desired gains
+void Actuator::setPIDGains(double P, double I, double D) {
+  this->Kp = P;
+  this->Ki = I;
+  this->Kd = D;
 }
 
 // Use calculated path to move joint to specified position
-// OUTPUT: Speed to send to joint
-void Actuator::positionAlgorithm() {
+// INPUT: Time passed from last loop (for integral calculation)
+void Actuator::positionAlgorithm(int dT) {
   // Only run algorithm for motors/actuators and if not in an error state;
   if (!(this->ACTUATOR_TYPE == ActuatorType::MOTOR || this->ACTUATOR_TYPE == ActuatorType::LINEAR)) {return;} 
   if (this->error != ErrorCode::NO_ERROR) {return;}
 
-  // Initialize output to zero
-  float newSpeed = 0;
+  // Calculate difference between desired and current position
+  double error = this->cmdPos - this->currPos;
+  // Calculate area under position curve
+  integral += (error + this->lastError) / 2 * (double)dT / 1000.0;   //Riemann sum integral
+  // Calculate derivate of position difference
+  double dError = (error - this->lastError) / (double)dT / 1000.0;   //derivative
+  // Store position difference for next loop
+  this->lastError = error;
+  // Do PID calculation
+  double PID = (this->Kp * error) + (this->Ki * this->integral) + (this->Kd * dError);
 
-  // If joint is close to desired position, stop it
-  if (abs(this->currPos - this->cmdPos) <= this->degToUnit(1) && !this->overshooting) {
-    this->currSpeed = newSpeed;
-    this->sendMotorSpeed(newSpeed);
-    return;
-  }
-
-  // Is is close enough to start slowing down?
-  if (abs(this->cmdPos - this->currPos) > this->delta_pos_SafeStop) {
-    // Apply acceleration
-    newSpeed = this->currSpeed + this->accel*this->dir_travel;
-    // Cap speed at MAX speed
-    if (abs(newSpeed) > this->safeMaxSpeed) {newSpeed = this->safeMaxSpeed*this->dir_travel;}
-  
-    // If in the overshot edge case but initial velocity is opposite to travel direction, direction needs to be flipped once motor 
-    // returns to initial position so it begins deccelerating
-    if (this->overshooting && this->started_opposite && this->dir_initialSpeed == -this->dir_travel && (this->currPos - this->initialPos)*this->dir_travel > 0) {
-      this->dir_travel = -this->dir_travel;
-    }
-  // Is this the overshot edge case? Are we overshooting? Are we still going the wrong way?
-  } else if (this->overshooting && abs(this->cmdPos - this->currPos) <= this->delta_pos_SafeStop && this->currSpeed/abs(this->currSpeed) != this->dir_travel) {
-    newSpeed = this->currSpeed + this->accel * this->dir_travel;
-
-  // Slowing down
-  } else {
-    // Apply acceleration in reverse
-    newSpeed = this->currSpeed - this->accel*this->dir_travel;
-    // Keep motor from overshooting and reversing direction
-    if (newSpeed*this->dir_travel < 0) {newSpeed = 0;}
-    this->overshooting = false; // Otherwise, motor will keep trying to correct and begin oscilating
-  }
-
-  // Send adjusted speed to joint controller
-  this->currSpeed = newSpeed;
-  this->sendMotorSpeed(newSpeed);
+  // Send speed to joint
+  this->sendTargetSpeed(constrain(PID, -100, 100));
 }
 
 // LINEAR ACTUATOR SPECIFIC FUNCTIONS ----------------------------------------------------------------------------------
@@ -312,7 +231,7 @@ void Actuator::calibratePos(float pos) {
   
   // Store current position of encoder
   this->currPos = pos;
-  this->calcPath(pos);
+  this->cmdPos = pos;
   // Clear uncertain position error state
   this->error = ErrorCode::NO_ERROR;
 
@@ -371,7 +290,10 @@ void Actuator::reset(float pos) {
   // If actuator is motor/linear, use brake command then recalibrate position algorithm to current position 
   else if (ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {
     this->commandW7(I2CCommand::MotorBrake, 16);
-    this->calcPath(this->currPos);
+
+    // Clear PID variables
+    this->integral = 0;
+    this->lastError = 0;
   }
   
   // Give driver some time to execute command

@@ -122,13 +122,21 @@ void parseCommand() {
         Serial.print(": ");
         actuator[n].print();
         break;
+      case 'K':
+        // Set gains for PID algorithms
+        double P = Serial.parseFloat();
+        double I = Serial.parseFloat();
+        double D = Serial.parseFloat();
+        
+        actuator[n].setPIDGains(P, I, D);
+        break;
       case 'H':
         //Home Motor
         cmdValue = Serial.parseFloat();
         actuator[n].goHome(cmdValue);
         break;
-      case 'G':
-        // Actuate Gripper
+      case 'E':
+        // Use end effector
         
         break;
       default:

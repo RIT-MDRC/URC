@@ -1,6 +1,7 @@
 #include "Arduino.h"
 #include "Math.h"
 #include <Wire.h>
+#include <AutoPID.h>
 
 //ACTUATOR TYPES
 // These determine which I2C commands to use and how position is controlled
@@ -81,9 +82,9 @@ class Actuator {
     void goHome(int dir);                            // Recalibrate home/zero positon of joint
 
     // MOTOR CONTROL (Control position by adjsuting speed)
-    void sendMotorSpeed(double newSpeed); // Send speed to motor controller in its perferred format
-    void calcPath(float newPos);         // Calculate path to desired position by adjusting speed
-    void positionAlgorithm();            // Execute pre-calculated path to desired position by controlling speed
+    void sendMotorSpeed(double newSpeed);      // Send speed to motor controller in its perferred format
+    void setPIDGains(double P, double I, double D); // Set parameters of PID position algorithm
+    void positionAlgorithm(int dT);                  // Execute pre-calculated path to desired position by controlling speed
     
     // LINEAR_ACTUATOR CONTROL
     void calibratePos(float pos);
@@ -145,13 +146,12 @@ class Actuator {
     float encoderAccel;   // Actual accel of motor
     
     // POSITION ALGORITHM VARIABLES
-    int dir_travel;            // Which way is motor trying to go? (Which way is accelerate applied?)
-    int dir_initialSpeed;      // Which way was the motor going when path was calculated?
-    float delta_pos_SafeStop;  // Distance required to safely stop at desired position (used in path calculation)
-    float initialPos;          // inital motor position when path was calculated
-    bool overshooting;      // Is the initial speed to large to reach desired position without overshooting?
-    bool started_opposite;  // Is the initial speed direction opposite to the travel direction from initial to desired positions
-
+    double Kp;     // Proportional gain for PID algorithm
+    double Ki;     // Integral gain for PID algorithm
+    double Kd;     // Derivative gain for PID algorithm
+    double integral;   // Value of integral under position curve for PID
+    double lastError;  // Used to store last loop's difference between desired and current position
+    
     // FLAG VARIABLES
     ErrorCode error;        // Is motor in an error state and unsafe to run?
     bool reversedMotion;    // Is the hardware making the motor go the wrong way? (Can fix hardware instead)

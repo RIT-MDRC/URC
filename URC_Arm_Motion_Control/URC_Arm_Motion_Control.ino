@@ -56,12 +56,18 @@ void setup() {
   delay(1000);
   // Begin serial communication
   Serial.begin(115200);
-  Serial.setTimeout(1);
+  Serial.setTimeout(1);  // Stops reading from serial 1 millisecond after reading last character
   
   // Begin I2C communication
   Wire.begin();
+  
   // Tell motor controller it is safe to move
   for (int n = 0; n < NUM_ACTUATORS; n++) {actuator[n].exitSafeStart();}
+
+  // Set PID Algorithm gains for motor actuators
+  actuator[0].setPIDGains(1,0,0);
+  actuator[1].setPIDGains(1,0,0);
+  actuator[2].setPIDGains(0.2,0.5,5);
 
   // Initialize input for joint 3 linear actuator potentiometer pin
   pinMode(J3FeedbackPin,INPUT);  // Input pin for pot
@@ -76,7 +82,7 @@ void setup() {
   pinMode(resetButtonPin,INPUT);
   pinMode(modeSwitchPin,INPUT);
 
-  // Initialize if manual speed control mode is selected
+  // Initialize if automatic position control mode is active
   automaticMode = digitalRead(modeSwitchPin);  
   
   // Initialize time variables
@@ -99,7 +105,15 @@ void loop() {
    *    C - Command Identifier (char)
    *    n - Actuator Number (1,2,3,4,5,6)
    *    v - Command Value (int)
-   * Valid Command Identifiers are P - Postion Set, S - Max Speed, R - Reset Drivers, Q - Print to Serial, M - Move, H - Homing
+   * Valid Command Identifiers: 
+   *    P - Desired Position
+        S - Desired Speed
+        R - Reset Actuator
+        M - Maximum Safe Speed
+        Q - Print to Serial
+        K - PID Algorithm Gains
+        H - Recalibrate home position
+        E - Use end effector
    */
   // Check if command has been sent
   if (Serial.available()) {parseCommand();}
@@ -110,13 +124,13 @@ void loop() {
 
     for (int n = 0; n < NUM_ACTUATORS; n++) {actuator[n].resetCommandTimeout();}
 
+    // Read encoders
     float newPos[NUM_ACTUATORS] = {enc_J1.read(), enc_J2.read(), (float)analogRead(J3FeedbackPin), 0, 0, 0};
-
-    // Read and interpret the encoder
+    // Pass encoder values to actuators
     for (int n = 0; n < NUM_ACTUATORS; n++) {actuator[n].interpretEncoder(newPos[n]);}
 
 // MANUAL SPEED CONTROL VS AUTOMATIC POSITION CONTROL ********************************************************************
-    // If switching to manual mode, clear all position algorithms
+    // If switching to manual speed mode, clear all position algorithms
     if (digitalRead(modeSwitchPin) == HIGH && automaticMode) {
       // Turn automatic position control off
       automaticMode = false;
@@ -126,7 +140,7 @@ void loop() {
       }
       Serial.println(" MANUAL SPEED CONTROL ACTIVE");
     } 
-    // If switching to automatic mode, set all speeds to zero (without reseting anything else) to clear all manual speeds
+    // If switching to automatic position mode, set all speeds to zero (without reseting anything else) to clear all manual speeds
     else if (digitalRead(modeSwitchPin) == LOW && !automaticMode) {
       // Turn automatic position control off
       automaticMode = true;
@@ -135,10 +149,10 @@ void loop() {
       Serial.println(" AUTOMATIC POSITION CONTROL ACTIVE");
     }
     
-    // If not in manual mode, run position algorithm for all actuators (if stepper, this will be ignored)
-    if (automaticMode) {for (int n = 0; n < NUM_ACTUATORS; n++) {actuator[n].positionAlgorithm();}}
+    // If in automatic position mode, run position algorithm for all actuators (if stepper, this will be ignored)
+    if (automaticMode) {for (int n = 0; n < NUM_ACTUATORS; n++) {actuator[n].positionAlgorithm(timer);}}
     
-    // Check if reset button is pressed, reset every joint and set all state variables to zero
+    // If reset button is pressed, reset every joint and set all state variables to zero
     if (digitalRead(resetButtonPin) == HIGH) {
       // Reset each actuator and store its current position
       for (int n = 0; n < NUM_ACTUATORS; n++) { actuator[n].reset(actuator[n].getCurrPos()); }
