@@ -1,6 +1,8 @@
 #include "Actuator.h" 
 
 // CONSTRUCTOR
+// INPUTS: I2C Device Numcer, Subtype of Actuator, Minimum Position, Maximum Position, Default Maximum Safe Speed, Acceleration, Encoder units per Revolution,
+//            Gear Ratio of Gearbox between Actuator Output and Joint, Should the direction of travel be reversed?
 Actuator::Actuator(uint8_t device_num, ActuatorType type, float minPos_degrees, float maxPos_degrees, float max_speed, float acc, double units_per_rev, double gear_ratio, bool reversed) {
   // Initialize unchangable constants
   this->I2C_NUM = device_num;
@@ -31,6 +33,7 @@ Actuator::Actuator(uint8_t device_num, ActuatorType type, float minPos_degrees, 
   this->Kd = 0;
   this->integral = 0;
   this->lastError = 0;
+  this->lastPos = 0;
   
   // If using actuator, set error state so that joint doesn't move until position calibrated
   if (type == ActuatorType::LINEAR) {this->error = ErrorCode::POS_UNCERTAIN;}
@@ -56,6 +59,7 @@ void Actuator::exitSafeStart() {
 // Must be called at least once per second to let driver know that everything is still okay
 // If command timeout error occurs, an exitSafeStart command must be sent to reset driver
 void Actuator::resetCommandTimeout() {
+  // MOTOR and LINEAR drivers do not have the feature, so will ignore this command
   if (this->ACTUATOR_TYPE == ActuatorType::MOTOR || this->ACTUATOR_TYPE == ActuatorType::LINEAR) {return;}
   commandQuick(I2CCommand::ResetCommandTimeout);
 }
@@ -69,27 +73,20 @@ void Actuator::sendTargetSpeed(double percent) {
   if (this->error != ErrorCode::NO_ERROR) {return;}
   
   // Make sure desired percent is <= 100%
-  if (abs(percent) > 100) {percent = (double)100 * percent/abs(percent);}
+  percent = constrain(percent,-100,100);
   
   // Calculate new speed
   double speed = (double)this->getSafeMaxSpeed() * percent / (double)100;
+
+  // Check if speed needs to be reversed due to hardware mix-up
+  if (reversedMotion) {speed *= -1;}
   
-  // If joint is a motor/actuator, send absolute value of speed and set direction with different commands
-  if (ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {
-    // Send command to motor control in a format it will understand
-    this->sendMotorSpeed((float)speed);
-  }
+  // If joint is a motor/actuator, use the MOTOR/LINEAR specific command
+  if (ACTUATOR_TYPE == ActuatorType::MOTOR || ACTUATOR_TYPE == ActuatorType::LINEAR) {this->sendMotorSpeed((float)speed);}
   
-  // If joint is a stepper, value can be negative and there is only one command
-  // NOTE: Driver will automatically enforce safe speed limit
-  else if (this->ACTUATOR_TYPE == ActuatorType::STEPPER) {
-    // Check if speed needs to be reversed due to hardware mix-up
-    if (reversedMotion) {speed *= -1;}
-    
-    // Send command after converting speed to steps per 10000 seconds
-    // NOTE: I have no idea why the driver uses steps per 10000 seconds. Thats just what the documentation says
-    commandW32(I2CCommand::SetTargetVelocity, (int32_t)speed*10000);
-  }
+  // If joint is a stepper, convert speed to steps per 10000 seconds before sending
+  // NOTE: I have no idea why the driver uses steps per 10000 seconds. Thats just what the documentation says
+  else if (this->ACTUATOR_TYPE == ActuatorType::STEPPER) {commandW32(I2CCommand::SetTargetVelocity, (int32_t)speed*10000);}
 
   // Store new speed
   this->currSpeed = (float)speed;
@@ -178,9 +175,6 @@ void Actuator::sendMotorSpeed(double newSpeed) {
   // Initialize motor to go forward
   I2CCommand cmd = I2CCommand::MotorForward;
 
-  // Check if speed needs to be reversed due to hardware mix-up
-  if (reversedMotion) {newSpeed *= -1;}
-  
   // If input value is negative, change command to reverse and make value positive
   if (newSpeed < 0)  {
     cmd = I2CCommand::MotorReverse;
@@ -209,13 +203,14 @@ void Actuator::positionAlgorithm(int dT) {
   // Calculate difference between desired and current position
   double error = this->cmdPos - this->currPos;
   // Calculate area under position curve
-  integral += (error + this->lastError) / 2 * (double)dT / 1000.0;   //Riemann sum integral
-  // Calculate derivate of position difference
-  double dError = (error - this->lastError) / (double)dT / 1000.0;   //derivative
+  integral += (error + this->lastError) / 2 * (double)dT;   //Riemann sum integral
+  // Calculate derivate of position
+  double dPos = (double)(this->currPos - this->lastPos) / (double)dT;   //derivative
   // Store position difference for next loop
   this->lastError = error;
+  this->lastPos = this->currPos;
   // Do PID calculation
-  double PID = (this->Kp * error) + (this->Ki * this->integral) + (this->Kd * dError);
+  double PID = (this->Kp * error) + (this->Ki * this->integral) - (this->Kd * dPos);
 
   // Send speed to joint
   this->sendTargetSpeed(constrain(PID, -100, 100));
@@ -297,7 +292,7 @@ void Actuator::reset(float pos) {
   }
   
   // Give driver some time to execute command
-  delay(10);
+  delay(5);
   
   // Clear error state unless it is a position uncertain error (must HOME or RECALIBRATE to clear that error)
   if (error !=ErrorCode::POS_UNCERTAIN) {

@@ -1,3 +1,10 @@
+/* ACTUATOR CLASS
+ *  Handles position/speed control and I2C communication with drivers
+ *  Has 3 sub-types:
+ *    MOTOR   - Simple brushed DC motors with encoders that can only be directly speed controlled (requires PID algorithm for position control)
+ *    LINEAR  - Linear motor-driven actuator. Controlled with same algorithm as MOTOR, but uses linear position encoder instead of angular
+ *    STEPPER - Stepper motor that is controlled by incrementally moving a small distance (stepping). Can be directly position controlled
+ */
 #include "Arduino.h"
 #include "Math.h"
 #include <Wire.h>
@@ -151,6 +158,7 @@ class Actuator {
     double Kd;     // Derivative gain for PID algorithm
     double integral;   // Value of integral under position curve for PID
     double lastError;  // Used to store last loop's difference between desired and current position
+    double lastPos;    // Used to store last loop's position
     
     // FLAG VARIABLES
     ErrorCode error;        // Is motor in an error state and unsafe to run?

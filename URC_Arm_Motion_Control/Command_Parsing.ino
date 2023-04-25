@@ -28,6 +28,7 @@ void parseCommand() {
     if (cmd > 90) {cmd -= 32;}
     
     switch (cmd) {
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'P':
         // Set new command position for automatic position control
         cmdValue = Serial.parseFloat();
@@ -56,6 +57,7 @@ void parseCommand() {
         Serial.print("POSITION: ");
         Serial.println(cmdValue);
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'S':
         // Set new desired speed for manual speed control
         cmdValue = Serial.parseFloat();
@@ -81,11 +83,13 @@ void parseCommand() {
         Serial.print("SPEED: ");
         Serial.println(cmdValue);
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'R':
         // Reset specified actuator to clear error or immediately stop motion
         cmdValue = Serial.parseFloat();
 
         // If command value is non-zero, actuator forgets its position
+        // Otherwise, store position of actuator
         if (cmdValue != 0) {
           // Reset actuator
           actuator[n].reset();
@@ -107,6 +111,7 @@ void parseCommand() {
         // Otherwise, reset and store current position
         else {actuator[n].reset( actuator[n].getCurrPos() );}
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'M':
         // Set new maximum safe speed of specified actuator
         cmdValue = Serial.parseFloat();
@@ -115,6 +120,7 @@ void parseCommand() {
         Serial.print("SPEED LIMIT: ");
         Serial.println(cmdValue);
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'Q':
         // Print status of actuator
         Serial.print("ACTUATOR ");
@@ -122,24 +128,39 @@ void parseCommand() {
         Serial.print(": ");
         actuator[n].print();
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'K':
         // Set gains for PID algorithms
-        double P = Serial.parseFloat();
-        double I = Serial.parseFloat();
-        double D = Serial.parseFloat();
+        double Kp = Serial.parseFloat();
+        double Ki = Serial.parseFloat();
+        double Kd = Serial.parseFloat();
+
+        Serial.print(" Kp: ");
+        Serial.print(Kp);
+        Serial.print(", Ki: ");
+        Serial.print(Ki);
+        Serial.print(" Kd: ");
+        Serial.println(Kd);
         
-        actuator[n].setPIDGains(P, I, D);
+        actuator[n].setPIDGains(Kp, Ki, Kd);
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'H':
         //Home Motor
         cmdValue = Serial.parseFloat();
         actuator[n].goHome(cmdValue);
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       case 'E':
         // Use end effector
         
         break;
+// --------------------------------------------------------------------------------------------------------------------------------------------------
       default:
+        // If command identifier is not recognized
+        Serial.print("COMMAND IDENTIFIER ");
+        Serial.print(cmd);
+        Serial.println(" not recognized");
         break;
     }
 }
